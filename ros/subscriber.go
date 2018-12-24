@@ -117,7 +117,7 @@ func (sub *defaultSubscriber) start(wg *sync.WaitGroup, nodeId string, nodeApiUr
 			logger.Debug("Receive addCallbackChan")
 			sub.callbacks = append(sub.callbacks, callback)
 		case msgEvent := <-sub.msgChan:
-			// Pop received message then bind callbacks and enqueue to the job channle.
+			// Pop received message then bind callbacks and enqueue to the job channel.
 			logger.Debug("Receive msgChan")
 			callbacks := make([]interface{}, len(sub.callbacks))
 			copy(callbacks, sub.callbacks)

@@ -86,9 +86,10 @@ func findAllServices(rosPkgPaths []string) (map[string]string, error) {
 }
 
 type MsgContext struct {
-	msgPathMap  map[string]string
-	srvPathMap  map[string]string
-	msgRegistry map[string]*MsgSpec
+	msgPathMap    map[string]string
+	srvPathMap    map[string]string
+	actionPathMap map[string]string
+	msgRegistry   map[string]*MsgSpec
 }
 
 func NewMsgContext(rosPkgPaths []string) (*MsgContext, error) {
@@ -160,11 +161,15 @@ func (ctx *MsgContext) LoadMsgFromFile(filePath string, fullname string) (*MsgSp
 }
 
 func (ctx *MsgContext) LoadMsg(fullname string) (*MsgSpec, error) {
+	fmt.Println("HELLO")
 	if spec, ok := ctx.msgRegistry[fullname]; ok {
+		fmt.Println("HELLO")
 		return spec, nil
 	} else {
 		if path, ok := ctx.msgPathMap[fullname]; ok {
+			fmt.Println("JIJNPO")
 			spec, err := ctx.LoadMsgFromFile(path, fullname)
+			fmt.Println(spec)
 			if err != nil {
 				return nil, err
 			} else {
@@ -172,6 +177,7 @@ func (ctx *MsgContext) LoadMsg(fullname string) (*MsgSpec, error) {
 				return spec, nil
 			}
 		} else {
+			fmt.Println("JIJNPOff")
 			return nil, fmt.Errorf("Message definition of `%s` is not found", fullname)
 		}
 	}
@@ -234,6 +240,83 @@ func (ctx *MsgContext) LoadSrv(fullname string) (*SrvSpec, error) {
 	}
 }
 
+func (ctx *MsgContext) LoadActionFromString(text string, fullname string) (*ActionSpec, error) {
+	packageName, shortName, err := packageResourceName(fullname)
+	if err != nil {
+		return nil, err
+	}
+
+	components := strings.Split(text, "---")
+	if len(components) != 3 {
+		return nil, fmt.Errorf("Syntax error: missing '---'")
+	}
+
+	goalText := components[0]
+	feedbackText := components[1]
+	resultText := components[2]
+	fmt.Println(fullname)
+	goalSpec, err := ctx.LoadMsgFromString(goalText, fullname+"Goal")
+	if err != nil {
+		return nil, err
+	}
+	actionGoalText := "Header header\nactionlib_msgs/GoalID goal_id\n" + fullname + "Goal goal\n"
+	actionGoalSpec, err := ctx.LoadMsgFromString(actionGoalText, fullname+"ActionGoal")
+	if err != nil {
+		return nil, err
+	}
+	feedbackSpec, err := ctx.LoadMsgFromString(feedbackText, fullname+"Feedback")
+	if err != nil {
+		return nil, err
+	}
+	actionFeedbackText := "Header header\nactionlib_msgs/GoalStatus status\n" + fullname + "Feedback feedback"
+	actionFeedbackSpec, err := ctx.LoadMsgFromString(actionFeedbackText, fullname+"ActionFeedback")
+	if err != nil {
+		return nil, err
+	}
+	resultSpec, err := ctx.LoadMsgFromString(resultText, fullname+"Result")
+	if err != nil {
+		return nil, err
+	}
+	actionResultText := "Header header\nactionlib_msgs/GoalStatus status\n" + fullname + "Result result"
+	actionResultSpec, err := ctx.LoadMsgFromString(actionResultText, fullname+"ActionResult")
+	if err != nil {
+		return nil, err
+	}
+
+	spec := &ActionSpec{
+		packageName, shortName, fullname, "", text, goalSpec, feedbackSpec, resultSpec, actionGoalSpec, actionFeedbackSpec, actionResultSpec,
+	}
+	md5sum, err := ctx.ComputeActionMD5(spec)
+	if err != nil {
+		return nil, err
+	}
+	spec.MD5Sum = md5sum
+
+	return spec, nil
+}
+
+func (ctx *MsgContext) LoadActionFromFile(filePath string, fullname string) (*ActionSpec, error) {
+	bytes, e := ioutil.ReadFile(filePath)
+	if e != nil {
+		return nil, e
+	}
+	text := string(bytes)
+	return ctx.LoadActionFromString(text, fullname)
+}
+
+func (ctx *MsgContext) LoadAction(fullname string) (*ActionSpec, error) {
+	if path, ok := ctx.actionPathMap[fullname]; ok {
+		spec, err := ctx.LoadActionFromFile(path, fullname)
+		if err != nil {
+			return nil, err
+		} else {
+			return spec, nil
+		}
+	} else {
+		return nil, fmt.Errorf("Service definition of `%s` is not found", fullname)
+	}
+}
+
 func (ctx *MsgContext) ComputeMD5Text(spec *MsgSpec) (string, error) {
 	var buf bytes.Buffer
 	for _, c := range spec.Constants {
@@ -264,6 +347,28 @@ func (ctx *MsgContext) ComputeMsgMD5(spec *MsgSpec) (string, error) {
 	}
 	hash := md5.New()
 	hash.Write([]byte(md5text))
+	sum := hash.Sum(nil)
+	md5sum := hex.EncodeToString(sum)
+	return md5sum, nil
+}
+
+func (ctx *MsgContext) ComputeActionMD5(spec *ActionSpec) (string, error) {
+	goalText, err := ctx.ComputeMD5Text(spec.ActionGoal)
+	if err != nil {
+		return "", err
+	}
+	feedbackText, err := ctx.ComputeMD5Text(spec.ActionFeedback)
+	if err != nil {
+		return "", err
+	}
+	resultText, err := ctx.ComputeMD5Text(spec.ActionResult)
+	if err != nil {
+		return "", err
+	}
+	hash := md5.New()
+	hash.Write([]byte(goalText))
+	hash.Write([]byte(feedbackText))
+	hash.Write([]byte(resultText))
 	sum := hash.Sum(nil)
 	md5sum := hex.EncodeToString(sum)
 	return md5sum, nil

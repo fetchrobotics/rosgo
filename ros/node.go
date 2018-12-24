@@ -61,6 +61,7 @@ type defaultNode struct {
 	subscribers    map[string]*defaultSubscriber
 	publishers     map[string]*defaultPublisher
 	servers        map[string]*defaultServiceServer
+	actions        map[string]*defaultActionServer
 	jobChan        chan func()
 	interruptChan  chan os.Signal
 	logger         Logger
@@ -154,6 +155,7 @@ func newDefaultNode(name string, args []string) (*defaultNode, error) {
 	node.subscribers = make(map[string]*defaultSubscriber)
 	node.publishers = make(map[string]*defaultPublisher)
 	node.servers = make(map[string]*defaultServiceServer)
+	node.actions = make(map[string]*defaultActionServer)
 	node.interruptChan = make(chan os.Signal)
 	node.ok = true
 
@@ -414,6 +416,20 @@ func (node *defaultNode) NewServiceServer(service string, srvType ServiceType, h
 	}
 	node.servers[name] = server
 	return server
+}
+
+func (node *defaultNode) NewActionServer(action string, actionType ActionType, handler interface{}, start bool) ActionServer {
+	name := node.nameResolver.remap(action)
+	a, ok := node.actions[name]
+	if ok {
+		a.Shutdown()
+	}
+	a = newDefaultActionServer(node, action, actionType, handler, 1, start)
+	if a == nil {
+		return nil
+	}
+	node.actions[name] = a
+	return a
 }
 
 func (node *defaultNode) SpinOnce() {

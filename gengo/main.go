@@ -34,6 +34,27 @@ func writeCode(fullname string, code string) error {
 	return ioutil.WriteFile(filename, res, os.FileMode(0664))
 }
 
+func generateMessageFromSpec(context *MsgContext, names ...string) error {
+	var spec *MsgSpec
+	var err error
+	var fullname string
+	if len(names) == 2 {
+		spec, err = context.LoadMsgFromFile(names[0], names[1])
+		fullname = names[1]
+	} else {
+		spec, err = context.LoadMsg(names[0])
+		fullname = names[0]
+	}
+	if err != nil {
+		return err
+	}
+	code, err := GenerateMessage(context, spec)
+	if err != nil {
+		return err
+	}
+	return writeCode(fullname, code)
+}
+
 func main() {
 	flag.Parse()
 	if _, err := os.Stat(*out); os.IsNotExist(err) {
@@ -45,7 +66,7 @@ func main() {
 	}
 
 	if flag.NArg() < 2 {
-		fmt.Println("USAGE: gengo [-out=] [-import_path=] msg|srv <NAME> [<FILE>]")
+		fmt.Println("USAGE: gengo [-out=] [-import_path=] msg|srv|action <NAME> [<FILE>]")
 		os.Exit(-1)
 	}
 
@@ -115,6 +136,82 @@ func main() {
 		}
 
 		err = writeCode(spec.Response.FullName, resCode)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(-1)
+		}
+	} else if mode == "action" {
+		var spec *ActionSpec
+		var err error
+		if len(os.Args) == 3 {
+			spec, err = context.LoadAction(fullname)
+		} else {
+			spec, err = context.LoadActionFromFile(os.Args[3], fullname)
+		}
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(-1)
+		}
+		err = generateMessageFromSpec(context, "actionlib_msgs/GoalID")
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(-1)
+		}
+		err = generateMessageFromSpec(context, "actionlib_msgs/GoalID")
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(-1)
+		}
+		err = generateMessageFromSpec(context, "actionlib_msgs/GoalStatus")
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(-1)
+		}
+		err = generateMessageFromSpec(context, "std_msgs/Header")
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(-1)
+		}
+		actionCode, goalCode, feedbackCode, resultCode, goalActionCode, feedbackActionCode, resultActionCode, err := GenerateAction(context, spec)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(-1)
+		}
+
+		err = writeCode(fullname, actionCode)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(-1)
+		}
+
+		err = writeCode(spec.Goal.FullName, goalCode)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(-1)
+		}
+
+		err = writeCode(spec.Result.FullName, resultCode)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(-1)
+		}
+
+		err = writeCode(spec.Feedback.FullName, feedbackCode)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(-1)
+		}
+		err = writeCode(spec.ActionGoal.FullName, goalActionCode)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(-1)
+		}
+		err = writeCode(spec.ActionResult.FullName, resultActionCode)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(-1)
+		}
+		err = writeCode(spec.ActionFeedback.FullName, feedbackActionCode)
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(-1)

@@ -247,8 +247,8 @@ func (ctx *MsgContext) LoadActionFromString(text string, fullname string) (*Acti
 	}
 
 	goalText := components[0]
-	feedbackText := components[1]
-	resultText := components[2]
+	resultText := components[1]
+	feedbackText := components[2]
 	goalSpec, err := ctx.LoadMsgFromString(goalText, fullname+"Goal")
 	if err != nil {
 		return nil, err
@@ -278,14 +278,23 @@ func (ctx *MsgContext) LoadActionFromString(text string, fullname string) (*Acti
 	}
 
 	spec := &ActionSpec{
-		packageName, shortName, fullname, "", text, goalSpec, feedbackSpec, resultSpec, actionGoalSpec, actionFeedbackSpec, actionResultSpec,
+		Package:        packageName,
+		ShortName:      shortName,
+		FullName:       fullname,
+		Text:           text,
+		Goal:           goalSpec,
+		Feedback:       feedbackSpec,
+		Result:         resultSpec,
+		ActionGoal:     actionGoalSpec,
+		ActionFeedback: actionFeedbackSpec,
+		ActionResult:   actionResultSpec,
 	}
+
 	md5sum, err := ctx.ComputeActionMD5(spec)
 	if err != nil {
 		return nil, err
 	}
 	spec.MD5Sum = md5sum
-
 	return spec, nil
 }
 

@@ -127,7 +127,7 @@ func (gh *clientGoalHandler) Cancel() error {
 		Stamp: ros.Now(),
 		Id:    gh.actionGoalID}
 
-	gh.actionClient.goalPub.Publish(cancelMsg)
+	gh.actionClient.cancelPub.Publish(cancelMsg)
 	gh.stateMachine.transitionTo(WaitingForCancelAck, gh, gh.transitionCb)
 	return nil
 }
@@ -163,7 +163,7 @@ func (gh *clientGoalHandler) updateResult(result ActionResult) error {
 	status := result.GetStatus()
 	state := gh.stateMachine.getState()
 
-	gh.stateMachine.setGoalStatus(status.Status, status.Text)
+	gh.stateMachine.setGoalStatus(status.GoalId, status.Status, status.Text)
 	gh.stateMachine.setGoalResult(result)
 
 	if state == WaitingForGoalAck ||
@@ -208,7 +208,7 @@ func (gh *clientGoalHandler) updateStatus(statusArr *actionlib_msgs.GoalStatusAr
 		return nil
 	}
 
-	gh.stateMachine.setGoalStatus(status.Status, status.Text)
+	gh.stateMachine.setGoalStatus(status.GoalId, status.Status, status.Text)
 	nextStates, err := gh.stateMachine.getTransitions(*status)
 	if err != nil {
 		return fmt.Errorf("error getting transitions: %v", err)

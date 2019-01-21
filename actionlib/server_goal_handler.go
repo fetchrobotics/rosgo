@@ -25,10 +25,10 @@ func newServerGoalHandlerWithGoal(as ActionServer, goal ActionGoal) *serverGoalH
 	}
 }
 
-func newServerGoalHandlerWithGoalId(as ActionServer, goalId *actionlib_msgs.GoalID) *serverGoalHandler {
+func newServerGoalHandlerWithGoalId(as ActionServer, goalID *actionlib_msgs.GoalID) *serverGoalHandler {
 	return &serverGoalHandler{
 		as: as,
-		sm: newServerStateMachine(*goalId),
+		sm: newServerStateMachine(*goalID),
 	}
 }
 
@@ -61,7 +61,7 @@ func (gh *serverGoalHandler) SetAccepted(text string) error {
 	return nil
 }
 
-func (gh *serverGoalHandler) SetCancelled(result ActionResult, text string) error {
+func (gh *serverGoalHandler) SetCancelled(result ros.Message, text string) error {
 	if gh.goal == nil {
 		return fmt.Errorf("attempt to set handler on an uninitialized handler handler")
 	}
@@ -73,12 +73,12 @@ func (gh *serverGoalHandler) SetCancelled(result ActionResult, text string) erro
 	}
 
 	gh.SetHandlerDestructionTime(ros.Now())
-	gh.as.PublishResult(status, result.GetResult())
+	gh.as.PublishResult(status, result)
 
 	return nil
 }
 
-func (gh *serverGoalHandler) SetRejected(result ActionResult, text string) error {
+func (gh *serverGoalHandler) SetRejected(result ros.Message, text string) error {
 	if gh.goal == nil {
 		return fmt.Errorf("attempt to set handler on an uninitialized handler handler")
 	}
@@ -90,12 +90,12 @@ func (gh *serverGoalHandler) SetRejected(result ActionResult, text string) error
 	}
 
 	gh.SetHandlerDestructionTime(ros.Now())
-	gh.as.PublishResult(status, result.GetResult())
+	gh.as.PublishResult(status, result)
 
 	return nil
 }
 
-func (gh *serverGoalHandler) SetAborted(result ActionResult, text string) error {
+func (gh *serverGoalHandler) SetAborted(result ros.Message, text string) error {
 	if gh.goal == nil {
 		return fmt.Errorf("attempt to set handler on an uninitialized handler handler")
 	}
@@ -107,12 +107,12 @@ func (gh *serverGoalHandler) SetAborted(result ActionResult, text string) error 
 	}
 
 	gh.SetHandlerDestructionTime(ros.Now())
-	gh.as.PublishResult(status, result.GetResult())
+	gh.as.PublishResult(status, result)
 
 	return nil
 }
 
-func (gh *serverGoalHandler) SetSucceeded(result ActionResult, text string) error {
+func (gh *serverGoalHandler) SetSucceeded(result ros.Message, text string) error {
 	if gh.goal == nil {
 		return fmt.Errorf("attempt to set handler on an uninitialized handler handler")
 	}
@@ -124,7 +124,7 @@ func (gh *serverGoalHandler) SetSucceeded(result ActionResult, text string) erro
 	}
 
 	gh.SetHandlerDestructionTime(ros.Now())
-	gh.as.PublishResult(status, result.GetResult())
+	gh.as.PublishResult(status, result)
 
 	return nil
 }

@@ -11,16 +11,41 @@ import (
 type CommState uint8
 
 const (
-	WaitingForGoalAck   CommState = 0
-	Pending             CommState = 1
-	Active              CommState = 2
-	WaitingForResult    CommState = 3
-	WaitingForCancelAck CommState = 4
-	Recalling           CommState = 5
-	Preempting          CommState = 6
-	Done                CommState = 7
-	Lost                CommState = 8
+	WaitingForGoalAck CommState = iota
+	Pending
+	Active
+	WaitingForResult
+	WaitingForCancelAck
+	Recalling
+	Preempting
+	Done
+	Lost
 )
+
+func (cs CommState) String() string {
+	switch cs {
+	case WaitingForGoalAck:
+		return "WAITING_FOR_GOAL_ACK"
+	case Pending:
+		return "PENDING"
+	case Active:
+		return "ACTIVE"
+	case WaitingForResult:
+		return "WAITING_FOR_RESULT"
+	case WaitingForCancelAck:
+		return "WAITING_FOR_CANCEL_ACK"
+	case Recalling:
+		return "RECALLING"
+	case Preempting:
+		return "PREEMPTING"
+	case Done:
+		return "DONE"
+	case Lost:
+		return "LOST"
+	default:
+		return "UNKNOWN"
+	}
+}
 
 type clientStateMachine struct {
 	state      CommState
@@ -64,10 +89,11 @@ func (sm *clientStateMachine) setState(state CommState) {
 	sm.state = state
 }
 
-func (sm *clientStateMachine) setGoalStatus(status uint8, text string) {
+func (sm *clientStateMachine) setGoalStatus(id actionlib_msgs.GoalID, status uint8, text string) {
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
 
+	sm.goalStatus.GoalId = id
 	sm.goalStatus.Status = status
 	sm.goalStatus.Text = text
 }
@@ -363,29 +389,4 @@ func (sm *clientStateMachine) getTransitions(goalStatus actionlib_msgs.GoalStatu
 	}
 
 	return
-}
-
-func stateToString(state CommState) string {
-	switch state {
-	case WaitingForGoalAck:
-		return "WAITING_FOR_GOAL_ACK"
-	case Pending:
-		return "PENDING"
-	case Active:
-		return "ACTIVE"
-	case WaitingForResult:
-		return "WAITING_FOR_RESULT"
-	case WaitingForCancelAck:
-		return "WAITING_FOR_CANCEL_ACK"
-	case Recalling:
-		return "RECALLING"
-	case Preempting:
-		return "PREEMPTING"
-	case Done:
-		return "DONE"
-	case Lost:
-		return "LOST"
-	default:
-		return "UNKNOWN_STATE"
-	}
 }

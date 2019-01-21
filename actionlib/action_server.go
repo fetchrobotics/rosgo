@@ -38,7 +38,7 @@ type defaultActionServer struct {
 	feedbackPub      ros.Publisher
 	statusPub        ros.Publisher
 	statusPubChan    chan struct{}
-	goalIdGen        *goalIdGenerator
+	goalIDGen        *goalIDGenerator
 	shutdownChan     chan struct{}
 }
 
@@ -64,7 +64,7 @@ func (as *defaultActionServer) init() {
 	as.shutdownChan = make(chan struct{}, 10)
 
 	// setup goal id generator and goal handlers
-	as.goalIdGen = newGoalIdGenerator(as.node.Name())
+	as.goalIDGen = newGoalIDGenerator(as.node.Name())
 	as.handlers = map[string]*serverGoalHandler{}
 
 	// get frequency from ros params
@@ -231,7 +231,7 @@ func (as *defaultActionServer) internalGoalCallback(goal ActionGoal, event ros.M
 
 	id := goalID.Id
 	if len(id) == 0 {
-		id = as.goalIdGen.generateID()
+		id = as.goalIDGen.generateID()
 		goal.SetGoalId(actionlib_msgs.GoalID{
 			Id:    id,
 			Stamp: goalID.Stamp,

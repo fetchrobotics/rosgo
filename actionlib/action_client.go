@@ -26,7 +26,7 @@ type defaultActionClient struct {
 	logger           ros.Logger
 	handlers         []*clientGoalHandler
 	handlersMutex    sync.RWMutex
-	goalIDGen        *goalIdGenerator
+	goalIDGen        *goalIDGenerator
 	statusReceived   bool
 	callerID         string
 }
@@ -41,7 +41,7 @@ func newDefaultActionClient(node ros.Node, action string, actType ActionType) *d
 		actionGoal:     actType.GoalType(),
 		logger:         node.Logger(),
 		statusReceived: false,
-		goalIDGen:      newGoalIdGenerator(node.Name()),
+		goalIDGen:      newGoalIDGenerator(node.Name()),
 	}
 
 	ac.goalPub = node.NewPublisher(fmt.Sprintf("%s/goal", action), actType.GoalType())
@@ -55,7 +55,7 @@ func newDefaultActionClient(node ros.Node, action string, actType ActionType) *d
 
 func (ac *defaultActionClient) SendGoal(goal ros.Message, transitionCb, feedbackCb interface{}) ClientGoalHandler {
 	if !ac.started {
-		ac.logger.Error("Trying to send a goal on an inactive ActionClient")
+		ac.logger.Error("[ActionClient] Trying to send a goal on an inactive ActionClient")
 	}
 
 	ag := ac.actionType.GoalType().NewMessage().(ActionGoal)
@@ -78,7 +78,7 @@ func (ac *defaultActionClient) SendGoal(goal ros.Message, transitionCb, feedback
 
 func (ac *defaultActionClient) CancelAllGoals() {
 	if !ac.started {
-		ac.logger.Error("Trying to cancel goals on an inactive ActionClient")
+		ac.logger.Error("[ActionClient] Trying to cancel goals on an inactive ActionClient")
 		return
 	}
 
@@ -87,7 +87,7 @@ func (ac *defaultActionClient) CancelAllGoals() {
 
 func (ac *defaultActionClient) CancelAllGoalsBeforeTime(stamp ros.Time) {
 	if !ac.started {
-		ac.logger.Error("Trying to cancel goals on an inactive ActionClient")
+		ac.logger.Error("[ActionClient] Trying to cancel goals on an inactive ActionClient")
 		return
 	}
 
@@ -122,7 +122,7 @@ func (ac *defaultActionClient) PublishCancel(cancel *actionlib_msgs.GoalID) {
 
 func (ac *defaultActionClient) WaitForServer(timeout ros.Duration) bool {
 	started := false
-	ac.logger.Info("[actionlib] Starting to wait for action server to start")
+	ac.logger.Info("[ActionClient] Waiting action server to start")
 	rate := ros.CycleTime(ros.NewDuration(0, 10000000))
 	waitStart := ros.Now()
 
@@ -137,7 +137,7 @@ LOOP:
 
 		now := ros.Now()
 		diff := now.Diff(waitStart)
-		if diff.Cmp(timeout) >= 0 {
+		if !timeout.IsZero() && diff.Cmp(timeout) >= 0 {
 			break LOOP
 		}
 
@@ -149,6 +149,19 @@ LOOP:
 	}
 
 	return started
+}
+
+func (ac *defaultActionClient) DeleteGoalHandler(gh *clientGoalHandler) {
+	ac.handlersMutex.Lock()
+	defer ac.handlersMutex.Unlock()
+
+	for i, h := range ac.handlers {
+		if h == gh {
+			ac.handlers[i] = ac.handlers[len(ac.handlers)-1]
+			ac.handlers[len(ac.handlers)-1] = nil
+			ac.handlers = ac.handlers[:len(ac.handlers)-1]
+		}
+	}
 }
 
 func (ac *defaultActionClient) internalResultCallback(result ActionResult, event ros.MessageEvent) {
@@ -186,19 +199,6 @@ func (ac *defaultActionClient) internalStatusCallback(statusArr *actionlib_msgs.
 	for _, h := range ac.handlers {
 		if err := h.updateStatus(statusArr); err != nil {
 			ac.logger.Error(err)
-		}
-	}
-}
-
-func (ac *defaultActionClient) DeleteGoalHandler(gh *clientGoalHandler) {
-	ac.handlersMutex.Lock()
-	defer ac.handlersMutex.Unlock()
-
-	for i, h := range ac.handlers {
-		if h == gh {
-			ac.handlers[i] = ac.handlers[len(ac.handlers)-1]
-			ac.handlers[len(ac.handlers)-1] = nil
-			ac.handlers = ac.handlers[:len(ac.handlers)-1]
 		}
 	}
 }

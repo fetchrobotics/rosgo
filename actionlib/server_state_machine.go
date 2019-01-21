@@ -14,13 +14,32 @@ type serverStateMachine struct {
 type Event uint8
 
 const (
-	CancelRequest Event = 1
-	Cancel        Event = 2
-	Reject        Event = 3
-	Accept        Event = 4
-	Succeed       Event = 5
-	Abort         Event = 6
+	CancelRequest Event = iota + 1
+	Cancel
+	Reject
+	Accept
+	Succeed
+	Abort
 )
+
+func (e Event) String() string {
+	switch e {
+	case CancelRequest:
+		return "CANCEL_REQUEST"
+	case Cancel:
+		return "CANCEL"
+	case Reject:
+		return "REJECT"
+	case Accept:
+		return "ACCEPT"
+	case Succeed:
+		return "SUCCEED"
+	case Abort:
+		return "ABORT"
+	default:
+		return "UNKNOWN"
+	}
+}
 
 func newServerStateMachine(goalID actionlib_msgs.GoalID) *serverStateMachine {
 	return &serverStateMachine{

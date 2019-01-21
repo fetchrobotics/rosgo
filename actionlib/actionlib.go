@@ -25,8 +25,8 @@ func NewServerGoalHandlerWithGoal(as ActionServer, goal ActionGoal) ServerGoalHa
 	return newServerGoalHandlerWithGoal(as, goal)
 }
 
-func NewServerGoalHandlerWithGoalId(as ActionServer, goalId *actionlib_msgs.GoalID) ServerGoalHandler {
-	return newServerGoalHandlerWithGoalId(as, goalId)
+func NewServerGoalHandlerWithGoalId(as ActionServer, goalID *actionlib_msgs.GoalID) ServerGoalHandler {
+	return newServerGoalHandlerWithGoalId(as, goalID)
 }
 
 type ActionClient interface {
@@ -65,10 +65,10 @@ type SimpleActionServer interface {
 	IsNewGoalAvailable() bool
 	IsPreemptRequested() bool
 	IsActive() bool
-	SetSucceeded(result ActionResult, text string) error
-	SetAborted(result ActionResult, text string) error
-	SetPreempted(result ActionResult, text string) error
-	AcceptNewGoal() (ActionGoal, error)
+	SetSucceeded(result ros.Message, text string) error
+	SetAborted(result ros.Message, text string) error
+	SetPreempted(result ros.Message, text string) error
+	AcceptNewGoal() (ros.Message, error)
 	PublishFeedback(feedback ActionFeedback)
 	GetDefaultResult() ActionResult
 	RegisterGoalCallback(callback interface{}) error
@@ -88,10 +88,10 @@ type ClientGoalHandler interface {
 
 type ServerGoalHandler interface {
 	SetAccepted(string) error
-	SetCancelled(ActionResult, string) error
-	SetRejected(ActionResult, string) error
-	SetAborted(ActionResult, string) error
-	SetSucceeded(ActionResult, string) error
+	SetCancelled(ros.Message, string) error
+	SetRejected(ros.Message, string) error
+	SetAborted(ros.Message, string) error
+	SetSucceeded(ros.Message, string) error
 	SetCancelRequested() bool
 	PublishFeedback(ActionFeedback)
 	GetGoal() ActionGoal

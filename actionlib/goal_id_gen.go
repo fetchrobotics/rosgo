@@ -7,19 +7,19 @@ import (
 	"github.com/fetchrobotics/rosgo/ros"
 )
 
-type goalIdGenerator struct {
+type goalIDGenerator struct {
 	goals      int
 	goalsMutex sync.RWMutex
 	nodeName   string
 }
 
-func newGoalIdGenerator(nodeName string) *goalIdGenerator {
-	return &goalIdGenerator{
+func newGoalIDGenerator(nodeName string) *goalIDGenerator {
+	return &goalIDGenerator{
 		nodeName: nodeName,
 	}
 }
 
-func (g *goalIdGenerator) generateID() string {
+func (g *goalIDGenerator) generateID() string {
 	g.goalsMutex.Lock()
 	defer g.goalsMutex.Unlock()
 

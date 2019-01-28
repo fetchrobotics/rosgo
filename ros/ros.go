@@ -23,6 +23,7 @@ type Node interface {
 	NewSubscriber(topic string, msgType MessageType, callback interface{}) Subscriber
 	NewServiceClient(service string, srvType ServiceType) ServiceClient
 	NewServiceServer(service string, srvType ServiceType, callback interface{}) ServiceServer
+	NewActionServer(action string, actionType ActionType, callback interface{}, start bool) ActionServer
 
 	OK() bool
 	SpinOnce()
@@ -83,5 +84,9 @@ type ServiceServer interface {
 
 type ServiceClient interface {
 	Call(srv Service) error
+	Shutdown()
+}
+
+type ActionServer interface {
 	Shutdown()
 }

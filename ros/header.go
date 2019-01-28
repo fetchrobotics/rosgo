@@ -22,20 +22,24 @@ const BufferSize = 1024
 func readConnectionHeader(r io.Reader) ([]header, error) {
 	buf := make([]byte, 4)
 	_, err := io.ReadAtLeast(r, buf, 4)
+	fmt.Print("hello")
 	if err != nil {
 		return nil, err
 	}
+	fmt.Print("read a header")
 	var headerSize uint32
 	bufReader := bytes.NewBuffer(buf)
 	err = binary.Read(bufReader, binary.LittleEndian, &headerSize)
 	if err != nil {
 		return nil, err
 	}
+	fmt.Print("read some more")
 	buf = make([]byte, int(headerSize))
 	_, err = io.ReadAtLeast(r, buf, int(headerSize))
 	if err != nil {
 		return nil, err
 	}
+	fmt.Print("didn't crash")
 
 	var done uint32 = 0
 	var headers []header

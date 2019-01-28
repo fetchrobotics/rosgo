@@ -3,7 +3,6 @@ package ros
 import (
 	"encoding/json"
 	"fmt"
-	"math/rand"
 	"net"
 	"net/http"
 	"os"
@@ -62,6 +61,7 @@ type defaultNode struct {
 	subscribers    map[string]*defaultSubscriber
 	publishers     sync.Map
 	servers        map[string]*defaultServiceServer
+	actions        map[string]*defaultActionServer
 	jobChan        chan func()
 	interruptChan  chan os.Signal
 	logger         Logger
@@ -74,23 +74,6 @@ type defaultNode struct {
 	homeDir        string
 	nameResolver   *NameResolver
 	nonRosArgs     []string
-}
-
-func listenRandomPort(address string, trialLimit int) (net.Listener, error) {
-	var listener net.Listener
-	var err error
-	numTrial := 0
-	for numTrial < trialLimit {
-		port := 1024 + rand.Intn(65535-1024)
-		addr := fmt.Sprintf("%s:%d", address, port)
-		listener, err = net.Listen("tcp", addr)
-		if err == nil {
-			return listener, nil
-		} else {
-			numTrial += 1
-		}
-	}
-	return nil, fmt.Errorf("listenRandomPort exceeds trial limit.")
 }
 
 func newDefaultNode(name string, args []string) (*defaultNode, error) {
@@ -152,8 +135,13 @@ func newDefaultNode(name string, args []string) (*defaultNode, error) {
 	node.nonRosArgs = rest
 
 	node.qualifiedName = node.namespace + "/" + node.name
+	if len(node.namespace) == 1 {
+		node.qualifiedName = node.namespace + node.name
+	}
+
 	node.subscribers = make(map[string]*defaultSubscriber)
 	node.servers = make(map[string]*defaultServiceServer)
+	node.actions = make(map[string]*defaultActionServer)
 	node.interruptChan = make(chan os.Signal)
 	node.ok = true
 
@@ -182,7 +170,7 @@ func newDefaultNode(name string, args []string) (*defaultNode, error) {
 		}
 	}
 
-	listener, err := listenRandomPort(node.listenIp, 10)
+	listener, err := net.Listen("tcp", ":0")
 	if err != nil {
 		logger.Fatal(err)
 		return nil, err
@@ -227,11 +215,46 @@ func (node *defaultNode) OK() bool {
 }
 
 func (node *defaultNode) getBusStats(callerId string) (interface{}, error) {
-	return buildRosApiResult(-1, "Not implemented", 0), nil
+	publishStats := []interface{}{}
+	for t, p := range node.publishers {
+		var msgDataSent uint32
+		var ps []interface{}
+		msgDataSent, ps = p.getPublisherStats()
+		pubConnectionData := []interface{}{t, msgDataSent, ps}
+		publishStats = append(publishStats, pubConnectionData)
+	}
+
+	subscribeStats := []interface{}{}
+	for t, s := range node.subscribers {
+		subConnectionData := []interface{}{t, s.getSubscriberStats()}
+		subscribeStats = append(subscribeStats, subConnectionData)
+	}
+
+	serviceStats := []interface{}{}
+
+	stats := []interface{}{publishStats, subscribeStats, serviceStats}
+	return buildRosApiResult(ApiStatusSuccess, "bus stats", stats), nil
 }
 
 func (node *defaultNode) getBusInfo(callerId string) (interface{}, error) {
-	return buildRosApiResult(-1, "Not implemeted", 0), nil
+	publishInfo := []interface{}{}
+	for _, p := range node.publishers {
+		publishInfo = append(publishInfo, p.getPublisherInfo()...)
+	}
+
+	subscribeInfo := []interface{}{}
+	for _, s := range node.subscribers {
+		subscribeInfo = append(subscribeInfo, s.getSubscriberInfo()...)
+	}
+
+	serviceInfo := []interface{}{}
+
+	info := []interface{}{}
+	info = append(info, publishInfo...)
+	info = append(info, subscribeInfo...)
+	info = append(info, serviceInfo...)
+
+	return buildRosApiResult(ApiStatusSuccess, "bus info", info), nil
 }
 
 func (node *defaultNode) getMasterUri(callerId string) (interface{}, error) {
@@ -385,7 +408,7 @@ func (node *defaultNode) NewSubscriber(topic string, msgType MessageType, callba
 			publishers = append(publishers, s)
 		}
 
-		logger.Debugf("Publisher URI list: ", publishers)
+		logger.Debugf("Publisher URI list: %+v", publishers)
 
 		sub = newDefaultSubscriber(name, msgType, callback)
 		node.subscribers[name] = sub
@@ -419,6 +442,20 @@ func (node *defaultNode) NewServiceServer(service string, srvType ServiceType, h
 	}
 	node.servers[name] = server
 	return server
+}
+
+func (node *defaultNode) NewActionServer(action string, actionType ActionType, handler interface{}, start bool) ActionServer {
+	name := node.nameResolver.remap(action)
+	a, ok := node.actions[name]
+	if ok {
+		a.Shutdown()
+	}
+	a = newDefaultActionServer(node, action, actionType, handler, 1, start)
+	if a == nil {
+		return nil
+	}
+	node.actions[name] = a
+	return a
 }
 
 func (node *defaultNode) SpinOnce() {

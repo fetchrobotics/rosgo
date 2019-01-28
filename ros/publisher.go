@@ -49,9 +49,10 @@ func newDefaultPublisher(node *defaultNode,
 	pub.sessionChan = make(chan *remoteSubscriberSession, 10)
 	pub.sessionErrorChan = make(chan error, 10)
 	pub.sessions = list.New()
+	pub.sesssionIDCount = 0
 	pub.connectCallback = connectCallback
 	pub.disconnectCallback = disconnectCallback
-	if listener, err := listenRandomPort(node.listenIp, 10); err != nil {
+	if listener, err := net.Listen("tcp", ":0"); err != nil {
 		panic(err)
 	} else {
 		pub.listener = listener
@@ -157,13 +158,52 @@ func (pub *defaultPublisher) hostAndPort() (string, string) {
 	return pub.node.hostname, port
 }
 
+func (pub *defaultPublisher) getPublisherStats() (uint32, []interface{}) {
+	var msgDataSent uint32
+	pubStats := []interface{}{}
+	for e := pub.sessions.Front(); e != nil; e = e.Next() {
+		session := e.Value.(*remoteSubscriberSession)
+		stat := []interface{}{
+			session.id,
+			session.sizeBytesSent + session.msgBytesSent,
+			session.numSent,
+			true,
+		}
+		msgDataSent += session.msgBytesSent
+		pubStats = append(pubStats, stat)
+	}
+	return msgDataSent, pubStats
+}
+
+func (pub *defaultPublisher) getPublisherInfo() []interface{} {
+	pubInfo := []interface{}{}
+	for e := pub.sessions.Front(); e != nil; e = e.Next() {
+		session := e.Value.(*remoteSubscriberSession)
+		stat := []interface{}{
+			session.id,
+			session.callerId,
+			"o",
+			"TCPROS",
+			session.topic,
+			true,
+		}
+		pubInfo = append(pubInfo, stat)
+	}
+	return pubInfo
+}
+
 type remoteSubscriberSession struct {
+	id                 int
 	conn               net.Conn
 	nodeId             string
+	callerId           string
 	topic              string
 	typeText           string
 	md5sum             string
 	typeName           string
+	sizeBytesSent      uint32
+	msgBytesSent       uint32
+	numSent            int64
 	quitChan           chan struct{}
 	msgChan            chan []byte
 	errorChan          chan error
@@ -172,14 +212,18 @@ type remoteSubscriberSession struct {
 	disconnectCallback func(SingleSubscriberPublisher)
 }
 
-func newRemoteSubscriberSession(pub *defaultPublisher, conn net.Conn) *remoteSubscriberSession {
+func newRemoteSubscriberSession(pub *defaultPublisher, id int, conn net.Conn) *remoteSubscriberSession {
 	session := new(remoteSubscriberSession)
+	session.id = id
 	session.conn = conn
 	session.nodeId = pub.node.qualifiedName
 	session.topic = pub.topic
 	session.typeText = pub.msgType.Text()
 	session.md5sum = pub.msgType.MD5Sum()
 	session.typeName = pub.msgType.Name()
+	session.sizeBytesSent = 0
+	session.msgBytesSent = 0
+	session.numSent = 0
 	session.quitChan = make(chan struct{})
 	session.msgChan = make(chan []byte, 10)
 	session.errorChan = pub.sessionErrorChan
@@ -260,7 +304,7 @@ func (session *remoteSubscriberSession) start() {
 		panic(fmt.Errorf("incompatible message md5: does not match for topic %s: %s vs %s",
 			session.topic, session.md5sum, headerMap["md5sum"]))
 	}
-
+	session.callerId = headerMap["callerid"]
 	ssp.subName = headerMap["callerid"]
 	if session.connectCallback != nil {
 		go session.connectCallback(ssp)

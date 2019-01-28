@@ -285,6 +285,56 @@ func (s *{{ .ShortName }}) ReqMessage() ros.Message { return &s.Request }
 func (s *{{ .ShortName }}) ResMessage() ros.Message { return &s.Response }
 `
 
+var actionTemplate = `
+// Automatically generated from the message definition "{{ .FullName }}.action"
+package {{ .Package }}
+import (
+    "github.com/fetchrobotics/rosgo/ros"
+)
+
+// Service type metadata
+type _Action{{ .ShortName }} struct {
+    name string
+    md5sum string
+    text string
+    goalType ros.MessageType
+    feedbackType ros.MessageType
+    resultType ros.MessageType
+}
+
+func (t *_Action{{ .ShortName }}) Name() string { return t.name }
+func (t *_Action{{ .ShortName }}) MD5Sum() string { return t.md5sum }
+func (t *_Action{{ .ShortName }}) Text() string { return t.text }
+func (t *_Action{{ .ShortName }}) GoalType() ros.MessageType { return t.goalType }
+func (t *_Action{{ .ShortName }}) FeedbackType() ros.MessageType { return t.feedbackType }
+func (t *_Action{{ .ShortName }}) ResultType() ros.MessageType { return t.resultType }
+func (t *_Action{{ .ShortName }}) NewAction() ros.Action {
+    return new({{ .ShortName }})
+}
+
+var (
+    Action{{ .ShortName }} = &_Action{{ .ShortName }} {
+        "{{ .FullName }}",
+        "{{ .MD5Sum }}",
+        ` + "`" + `{{ .Text }}` + "`" + `,
+        Msg{{ .ShortName }}ActionGoal,
+        Msg{{ .ShortName }}ActionFeedback,
+        Msg{{ .ShortName }}ActionResult,
+    }
+)
+
+
+type {{ .ShortName }} struct {
+    Goal {{ .ShortName }}ActionGoal
+    Feedback {{ .ShortName }}ActionFeedback
+    Result {{ .ShortName }}ActionResult
+}
+
+func (s *{{ .ShortName }}) GoalMessage() ros.Message { return &s.Goal }
+func (s *{{ .ShortName }}) FeedbackMessage() ros.Message { return &s.Feedback }
+func (s *{{ .ShortName }}) ResultMessage() ros.Message { return &s.Result }
+`
+
 type MsgGen struct {
 	MsgSpec
 	BinaryRequired bool
@@ -368,4 +418,44 @@ func GenerateService(context *MsgContext, spec *SrvSpec) (string, string, string
 		return "", "", "", err
 	}
 	return buffer.String(), reqCode, resCode, err
+}
+
+func GenerateAction(context *MsgContext, spec *ActionSpec) (string, string, string, string, string, string, string, error) {
+	goalCode, err := GenerateMessage(context, spec.Goal)
+	if err != nil {
+		return "", "", "", "", "", "", "", err
+	}
+	goalActionCode, err := GenerateMessage(context, spec.ActionGoal)
+	if err != nil {
+		return "", "", "", "", "", "", "", err
+	}
+	resultCode, err := GenerateMessage(context, spec.Result)
+	if err != nil {
+		return "", "", "", "", "", "", "", err
+	}
+	resultActionCode, err := GenerateMessage(context, spec.ActionResult)
+	if err != nil {
+		return "", "", "", "", "", "", "", err
+	}
+	feedbackCode, err := GenerateMessage(context, spec.Feedback)
+	if err != nil {
+		return "", "", "", "", "", "", "", err
+	}
+	feedbackActionCode, err := GenerateMessage(context, spec.ActionFeedback)
+	if err != nil {
+		return "", "", "", "", "", "", "", err
+	}
+
+	tmpl, err := template.New("action").Parse(actionTemplate)
+	if err != nil {
+		return "", "", "", "", "", "", "", err
+	}
+
+	var buffer bytes.Buffer
+
+	err = tmpl.Execute(&buffer, spec)
+	if err != nil {
+		return "", "", "", "", "", "", "", err
+	}
+	return buffer.String(), goalCode, feedbackCode, resultCode, goalActionCode, feedbackActionCode, resultActionCode, err
 }

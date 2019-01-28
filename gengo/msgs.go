@@ -335,13 +335,17 @@ type SrvSpec struct {
 }
 
 type ActionSpec struct {
-	ShortName string
-	FullName  string
-	Text      string
-	MD5Sum    string
-	Goal      *MsgSpec
-	Feedback  *MsgSpec
-	Result    *MsgSpec
+	Package        string
+	ShortName      string
+	FullName       string
+	Text           string
+	MD5Sum         string
+	Goal           *MsgSpec
+	Feedback       *MsgSpec
+	Result         *MsgSpec
+	ActionGoal     *MsgSpec
+	ActionFeedback *MsgSpec
+	ActionResult   *MsgSpec
 }
 
 type OptionMsgSpec func(*MsgSpec) error

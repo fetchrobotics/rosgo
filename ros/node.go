@@ -209,40 +209,46 @@ func (node *defaultNode) OK() bool {
 }
 
 func (node *defaultNode) getBusStats(callerId string) (interface{}, error) {
-	publisherStats := []interface{}{}
+	publishStats := []interface{}{}
 	for t, p := range node.publishers {
-		pair := []interface{}{t, p.msgType.Name(), p.getPublisherStats()}
-		publisherStats = append(publisherStats, pair)
+		var msgDataSent uint32
+		var ps []interface{}
+		msgDataSent, ps = p.getPublisherStats()
+		pubConnectionData := []interface{}{t, msgDataSent, ps}
+		publishStats = append(publishStats, pubConnectionData)
 	}
 
-	subscriberStats := []interface{}{}
+	subscribeStats := []interface{}{}
 	for t, s := range node.subscribers {
-		pair := []interface{}{t, s.getSubscriberStats()}
-		subscriberStats = append(subscriberStats, pair)
+		subConnectionData := []interface{}{t, s.getSubscriberStats()}
+		subscribeStats = append(subscribeStats, subConnectionData)
 	}
 
-	serverStats := []interface{}{}
+	serviceStats := []interface{}{}
 
-	stats := []interface{}{publisherStats, subscriberStats, serverStats}
-
+	stats := []interface{}{publishStats, subscribeStats, serviceStats}
 	return buildRosApiResult(-1, "Success", stats), nil
 }
 
 func (node *defaultNode) getBusInfo(callerId string) (interface{}, error) {
-	publisherInfo := []interface{}{}
-
-	subscriberInfo := []interface{}{}
-	for t, s := range node.subscribers {
-		pair := []interface{}{t, s.getSubscriberStats()}
-		subscriberInfo = append(subscriberInfo, pair)
+	publishInfo := []interface{}{}
+	for t, p := range node.publishers {
+		data := []interface{}{t, p.getPublisherInfo()}
+		publishInfo = append(publishInfo, data)
 	}
 
-	serverInfo := []interface{}{}
+	subscribeInfo := []interface{}{}
+	for t, s := range node.subscribers {
+		data := []interface{}{t, s.getSubscriberInfo()}
+		subscribeInfo = append(subscribeInfo, data)
+	}
+
+	serviceInfo := []interface{}{}
 
 	info := []interface{}{}
-	info = append(info, publisherInfo...)
-	info = append(info, subscriberInfo...)
-	info = append(info, serverInfo...)
+	info = append(info, publishInfo...)
+	info = append(info, subscribeInfo...)
+	info = append(info, serviceInfo...)
 
 	return buildRosApiResult(-1, "Success", info), nil
 }
@@ -398,7 +404,7 @@ func (node *defaultNode) NewSubscriber(topic string, msgType MessageType, callba
 			publishers = append(publishers, s)
 		}
 
-		logger.Debugf("Publisher URI list: ", publishers)
+		logger.Debugf("Publisher URI list: %+v", publishers)
 
 		sub = newDefaultSubscriber(name, msgType, callback)
 		node.subscribers[name] = sub

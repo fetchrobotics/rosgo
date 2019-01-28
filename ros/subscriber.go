@@ -20,7 +20,6 @@ type connectionStats struct {
 	id            int
 	bytesReceived uint32
 	dropEstimate  int
-	connected     bool
 	quitChan      chan struct{}
 }
 
@@ -36,6 +35,7 @@ type defaultSubscriber struct {
 	addCallbackChan  chan interface{}
 	shutdownChan     chan struct{}
 	connections      map[string]*connectionStats
+	deadConnections  map[string]*connectionStats
 	disconnectedChan chan string
 }
 
@@ -49,6 +49,7 @@ func newDefaultSubscriber(topic string, msgType MessageType, callback interface{
 	sub.shutdownChan = make(chan struct{}, 10)
 	sub.disconnectedChan = make(chan string, 10)
 	sub.connections = make(map[string]*connectionStats)
+	sub.deadConnections = make(map[string]*connectionStats)
 	sub.callbacks = []interface{}{callback}
 	return sub
 }
@@ -65,7 +66,7 @@ func (sub *defaultSubscriber) start(wg *sync.WaitGroup, nodeId string, nodeApiUr
 		logger.Debug("Loop")
 		select {
 		case list := <-sub.pubListChan:
-			logger.Debug("Receive pubListChan")
+			logger.Debugf("Receive pubListChan: %+v", list)
 			deadPubs := setDifference(sub.pubList, list)
 			newPubs := setDifference(list, sub.pubList)
 			sub.pubList = list
@@ -73,7 +74,10 @@ func (sub *defaultSubscriber) start(wg *sync.WaitGroup, nodeId string, nodeApiUr
 			for _, pub := range deadPubs {
 				quitChan := sub.connections[pub].quitChan
 				quitChan <- struct{}{}
-				// delete(sub.connections, pub)
+				if _, ok := sub.connections[pub]; ok {
+					sub.deadConnections[pub] = sub.connections[pub]
+					delete(sub.connections, pub)
+				}
 			}
 			for _, pub := range newPubs {
 				protocols := []interface{}{[]interface{}{"TCPROS"}}
@@ -93,10 +97,9 @@ func (sub *defaultSubscriber) start(wg *sync.WaitGroup, nodeId string, nodeApiUr
 					uri := fmt.Sprintf("%s:%d", addr, port)
 
 					sub.connections[pub] = new(connectionStats)
-					sub.connections[pub].id = len(sub.connections)
+					sub.connections[pub].id = len(sub.connections) + len(sub.connections)
 					sub.connections[pub].bytesReceived = 0
 					sub.connections[pub].dropEstimate = -1
-					sub.connections[pub].connected = false
 					sub.connections[pub].quitChan = make(chan struct{}, 10)
 
 					go startRemotePublisherConn(logger,
@@ -136,14 +139,12 @@ func (sub *defaultSubscriber) start(wg *sync.WaitGroup, nodeId string, nodeApiUr
 			logger.Debug("Callback job enqueued.")
 		case pubUri := <-sub.disconnectedChan:
 			logger.Debugf("Connection to %s was disconnected.", pubUri)
-			//delete(sub.connections, pubUri)
+			delete(sub.connections, pubUri)
 		case <-sub.shutdownChan:
 			// Shutdown subscription goroutine
 			logger.Debug("Receive shutdownChan")
-			for _, connStat := range sub.connections {
-				if !connStat.connected {
-					continue
-				}
+			for pub, connStat := range sub.connections {
+				sub.deadConnections[pub] = sub.connections[pub]
 				closeChan := connStat.quitChan
 				closeChan <- struct{}{}
 				close(closeChan)
@@ -204,7 +205,6 @@ func startRemotePublisherConn(logger Logger,
 	if resHeaderMap["type"] != msgType || resHeaderMap["md5sum"] != md5sum {
 		logger.Fatalf("Incomatible message type!")
 	}
-	connStat.connected = true
 	logger.Debug("Start receiving messages...")
 	event := MessageEvent{ // Event struct to be sent with each message.
 		PublisherName:    resHeaderMap["callerid"],
@@ -218,8 +218,6 @@ func startRemotePublisherConn(logger Logger,
 	for {
 		select {
 		case <-connStat.quitChan:
-			logger.Debug("quitting!")
-			connStat.connected = false
 			return
 		default:
 			conn.SetDeadline(time.Now().Add(1000 * time.Millisecond))
@@ -234,7 +232,6 @@ func startRemotePublisherConn(logger Logger,
 					} else {
 						logger.Error("Failed to read a message size")
 						disconnectedChan <- pubUri
-						connStat.connected = false
 						return
 					}
 				}
@@ -252,7 +249,6 @@ func startRemotePublisherConn(logger Logger,
 					} else {
 						logger.Error("Failed to read a message body")
 						disconnectedChan <- pubUri
-						connStat.connected = false
 					}
 				}
 				event.ReceiptTime = time.Now()
@@ -264,10 +260,25 @@ func startRemotePublisherConn(logger Logger,
 	}
 }
 
-func (sub *defaultSubscriber) getSubscriberStats() []*connectionStats {
-	var subStats []*connectionStats
+func (sub *defaultSubscriber) getSubscriberStats() []interface{} {
+	subStats := []interface{}{}
 	for _, connStat := range sub.connections {
-		subStats = append(subStats, connStat)
+		stat := []interface{}{
+			connStat.id,
+			connStat.bytesReceived,
+			-1,
+			true,
+		}
+		subStats = append(subStats, stat)
+	}
+	for _, connStat := range sub.deadConnections {
+		stat := []interface{}{
+			connStat.id,
+			connStat.bytesReceived,
+			-1,
+			true,
+		}
+		subStats = append(subStats, stat)
 	}
 	return subStats
 }
@@ -281,7 +292,18 @@ func (sub *defaultSubscriber) getSubscriberInfo() []interface{} {
 			"i",
 			"TCPROS",
 			sub.topic,
-			connStat.connected,
+			true,
+		}
+		subInfo = append(subInfo, connInfo)
+	}
+	for destURI, connStat := range sub.deadConnections {
+		connInfo := []interface{}{
+			connStat.id,
+			destURI,
+			"i",
+			"TCPROS",
+			sub.topic,
+			false,
 		}
 		subInfo = append(subInfo, connInfo)
 	}

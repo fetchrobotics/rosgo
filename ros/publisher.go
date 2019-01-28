@@ -49,6 +49,7 @@ func newDefaultPublisher(node *defaultNode,
 	pub.sessionChan = make(chan *remoteSubscriberSession, 10)
 	pub.sessionErrorChan = make(chan error, 10)
 	pub.sessions = list.New()
+	pub.deadSessions = list.New()
 	pub.connectCallback = connectCallback
 	pub.disconnectCallback = disconnectCallback
 	if listener, err := net.Listen("tcp", ":0"); err != nil {
@@ -91,6 +92,7 @@ func (pub *defaultPublisher) start(wg *sync.WaitGroup) {
 			if sessionError, ok := err.(*remoteSubscriberSessionError); ok {
 				for e := pub.sessions.Front(); e != nil; e = e.Next() {
 					if e.Value == sessionError.session {
+						pub.deadSessions.PushBack(e)
 						pub.sessions.Remove(e)
 						break
 					}
@@ -107,6 +109,7 @@ func (pub *defaultPublisher) start(wg *sync.WaitGroup) {
 			for e := pub.sessions.Front(); e != nil; e = e.Next() {
 				session := e.Value.(*remoteSubscriberSession)
 				session.quitChan <- struct{}{}
+				pub.deadSessions.PushBack(e)
 			}
 			pub.sessions.Init() // Clear all sessions
 			return
@@ -157,32 +160,74 @@ func (pub *defaultPublisher) hostAndPort() (string, string) {
 	return pub.node.hostname, port
 }
 
-func (pub *defaultPublisher) getPublisherStats() []interface{} {
+func (pub *defaultPublisher) getPublisherStats() (uint32, []interface{}) {
+	var msgDataSent uint32
 	pubStats := []interface{}{}
 	for e := pub.sessions.Front(); e != nil; e = e.Next() {
 		session := e.Value.(*remoteSubscriberSession)
-		pair := []interface{}{
+		stat := []interface{}{
 			session.id,
-			session.bytesSent,
+			session.sizeBytesSent + session.msgBytesSent,
 			session.numSent,
-			session.connected,
+			true,
 		}
-		pubStats = append(pubStats, pair)
+		msgDataSent += session.msgBytesSent
+		pubStats = append(pubStats, stat)
 	}
-	return pubStats
+	for e := pub.deadSessions.Front(); e != nil; e = e.Next() {
+		session := e.Value.(*remoteSubscriberSession)
+		stat := []interface{}{
+			session.id,
+			session.sizeBytesSent + session.msgBytesSent,
+			session.numSent,
+			false,
+		}
+		msgDataSent += session.msgBytesSent
+		pubStats = append(pubStats, stat)
+	}
+	return msgDataSent, pubStats
+}
+
+func (pub *defaultPublisher) getPublisherInfo() []interface{} {
+	pubInfo := []interface{}{}
+	for e := pub.sessions.Front(); e != nil; e = e.Next() {
+		session := e.Value.(*remoteSubscriberSession)
+		stat := []interface{}{
+			session.id,
+			session.conn.RemoteAddr().String(),
+			"o",
+			"TCPROS",
+			session.topic,
+			true,
+		}
+		pubInfo = append(pubInfo, stat)
+	}
+	for e := pub.deadSessions.Front(); e != nil; e = e.Next() {
+		session := e.Value.(*remoteSubscriberSession)
+		stat := []interface{}{
+			session.id,
+			session.conn.RemoteAddr().String(),
+			"o",
+			"TCPROS",
+			session.topic,
+			true,
+		}
+		pubInfo = append(pubInfo, stat)
+	}
+	return pubInfo
 }
 
 type remoteSubscriberSession struct {
 	id                 int
-	bytesSent          uint32
-	numSent            int64
-	connected          bool
 	conn               net.Conn
 	nodeId             string
 	topic              string
 	typeText           string
 	md5sum             string
 	typeName           string
+	sizeBytesSent      uint32
+	msgBytesSent       uint32
+	numSent            int64
 	quitChan           chan struct{}
 	msgChan            chan []byte
 	errorChan          chan error
@@ -194,15 +239,15 @@ type remoteSubscriberSession struct {
 func newRemoteSubscriberSession(pub *defaultPublisher, id int, conn net.Conn) *remoteSubscriberSession {
 	session := new(remoteSubscriberSession)
 	session.id = id
-	session.bytesSent = 0
-	session.numSent = 0
-	session.connected = false
 	session.conn = conn
 	session.nodeId = pub.node.qualifiedName
 	session.topic = pub.topic
 	session.typeText = pub.msgType.Text()
 	session.md5sum = pub.msgType.MD5Sum()
 	session.typeName = pub.msgType.Name()
+	session.sizeBytesSent = 0
+	session.msgBytesSent = 0
+	session.numSent = 0
 	session.quitChan = make(chan struct{})
 	session.msgChan = make(chan []byte, 10)
 	session.errorChan = pub.sessionErrorChan
@@ -314,7 +359,6 @@ func (session *remoteSubscriberSession) start() {
 
 		case <-session.quitChan:
 			logger.Debug("Receive quitChan")
-			session.connected = false
 			return
 
 		case msg := <-queue:

@@ -3,7 +3,6 @@ package ros
 import (
 	"encoding/json"
 	"fmt"
-	"math/rand"
 	"net"
 	"net/http"
 	"os"
@@ -74,23 +73,6 @@ type defaultNode struct {
 	homeDir        string
 	nameResolver   *NameResolver
 	nonRosArgs     []string
-}
-
-func listenRandomPort(address string, trialLimit int) (net.Listener, error) {
-	var listener net.Listener
-	var err error
-	numTrial := 0
-	for numTrial < trialLimit {
-		port := 1024 + rand.Intn(65535-1024)
-		addr := fmt.Sprintf("%s:%d", address, port)
-		listener, err = net.Listen("tcp", addr)
-		if err == nil {
-			return listener, nil
-		} else {
-			numTrial += 1
-		}
-	}
-	return nil, fmt.Errorf("listenRandomPort exceeds trial limit.")
 }
 
 func newDefaultNode(name string, args []string) (*defaultNode, error) {
@@ -182,7 +164,7 @@ func newDefaultNode(name string, args []string) (*defaultNode, error) {
 		}
 	}
 
-	listener, err := listenRandomPort(node.listenIp, 10)
+	listener, err := net.Listen("tcp", ":0")
 	if err != nil {
 		logger.Fatal(err)
 		return nil, err
@@ -227,11 +209,42 @@ func (node *defaultNode) OK() bool {
 }
 
 func (node *defaultNode) getBusStats(callerId string) (interface{}, error) {
-	return buildRosApiResult(-1, "Not implemented", 0), nil
+	publisherStats := []interface{}{}
+	for t, p := range node.publishers {
+		pair := []interface{}{t, p.msgType.Name(), p.getPublisherStats()}
+		publisherStats = append(publisherStats, pair)
+	}
+
+	subscriberStats := []interface{}{}
+	for t, s := range node.subscribers {
+		pair := []interface{}{t, s.getSubscriberStats()}
+		subscriberStats = append(subscriberStats, pair)
+	}
+
+	serverStats := []interface{}{}
+
+	stats := []interface{}{publisherStats, subscriberStats, serverStats}
+
+	return buildRosApiResult(-1, "Success", stats), nil
 }
 
 func (node *defaultNode) getBusInfo(callerId string) (interface{}, error) {
-	return buildRosApiResult(-1, "Not implemeted", 0), nil
+	publisherInfo := []interface{}{}
+
+	subscriberInfo := []interface{}{}
+	for t, s := range node.subscribers {
+		pair := []interface{}{t, s.getSubscriberStats()}
+		subscriberInfo = append(subscriberInfo, pair)
+	}
+
+	serverInfo := []interface{}{}
+
+	info := []interface{}{}
+	info = append(info, publisherInfo...)
+	info = append(info, subscriberInfo...)
+	info = append(info, serverInfo...)
+
+	return buildRosApiResult(-1, "Success", info), nil
 }
 
 func (node *defaultNode) getMasterUri(callerId string) (interface{}, error) {

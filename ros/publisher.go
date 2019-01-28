@@ -51,7 +51,7 @@ func newDefaultPublisher(node *defaultNode,
 	pub.sessions = list.New()
 	pub.connectCallback = connectCallback
 	pub.disconnectCallback = disconnectCallback
-	if listener, err := listenRandomPort(node.listenIp, 10); err != nil {
+	if listener, err := net.Listen("tcp", ":0"); err != nil {
 		panic(err)
 	} else {
 		pub.listener = listener
@@ -157,7 +157,26 @@ func (pub *defaultPublisher) hostAndPort() (string, string) {
 	return pub.node.hostname, port
 }
 
+func (pub *defaultPublisher) getPublisherStats() []interface{} {
+	pubStats := []interface{}{}
+	for e := pub.sessions.Front(); e != nil; e = e.Next() {
+		session := e.Value.(*remoteSubscriberSession)
+		pair := []interface{}{
+			session.id,
+			session.bytesSent,
+			session.numSent,
+			session.connected,
+		}
+		pubStats = append(pubStats, pair)
+	}
+	return pubStats
+}
+
 type remoteSubscriberSession struct {
+	id                 int
+	bytesSent          uint32
+	numSent            int64
+	connected          bool
 	conn               net.Conn
 	nodeId             string
 	topic              string
@@ -172,8 +191,12 @@ type remoteSubscriberSession struct {
 	disconnectCallback func(SingleSubscriberPublisher)
 }
 
-func newRemoteSubscriberSession(pub *defaultPublisher, conn net.Conn) *remoteSubscriberSession {
+func newRemoteSubscriberSession(pub *defaultPublisher, id int, conn net.Conn) *remoteSubscriberSession {
 	session := new(remoteSubscriberSession)
+	session.id = id
+	session.bytesSent = 0
+	session.numSent = 0
+	session.connected = false
 	session.conn = conn
 	session.nodeId = pub.node.qualifiedName
 	session.topic = pub.topic
@@ -291,6 +314,7 @@ func (session *remoteSubscriberSession) start() {
 
 		case <-session.quitChan:
 			logger.Debug("Receive quitChan")
+			session.connected = false
 			return
 
 		case msg := <-queue:

@@ -1,42 +1,41 @@
-
 // Automatically generated from the message definition "std_msgs/Header.msg"
 // This message has been customized to be in the standard library
 package ros
+
 import (
-    "bytes"
-    "encoding/binary"
+	"bytes"
+	"encoding/binary"
 )
 
-
 type _MsgHeader struct {
-    text string
-    name string
-    md5sum string
+	text   string
+	name   string
+	md5sum string
 }
 
 func (t *_MsgHeader) Text() string {
-    return t.text
+	return t.text
 }
 
 func (t *_MsgHeader) Name() string {
-    return t.name
+	return t.name
 }
 
 func (t *_MsgHeader) MD5Sum() string {
-    return t.md5sum
+	return t.md5sum
 }
 
 func (t *_MsgHeader) NewMessage() Message {
-    m := new(Header)
+	m := new(Header)
 	m.Seq = 0
 	m.Stamp = Time{}
 	m.FrameId = ""
-    return m
+	return m
 }
 
 var (
-    MsgHeader = &_MsgHeader {
-        `# Standard metadata for higher-level stamped data types.
+	MsgHeader = &_MsgHeader{
+		`# Standard metadata for higher-level stamped data types.
 # This is generally used to communicate timestamped data 
 # in a particular coordinate frame.
 # 
@@ -52,14 +51,14 @@ time stamp
 # 1: global frame
 string frame_id
 `,
-        "std_msgs/Header",
-        "2176decaecbce78abc3b96ef049fabed",
-    }
+		"std_msgs/Header",
+		"2176decaecbce78abc3b96ef049fabed",
+	}
 )
 
 type Header struct {
-	Seq uint32 `rosmsg:"seq:uint32"`
-	Stamp Time `rosmsg:"stamp:time"`
+	Seq     uint32 `rosmsg:"seq:uint32"`
+	Stamp   Time   `rosmsg:"stamp:time"`
 	FrameId string `rosmsg:"frame_id:string"`
 }
 
@@ -68,40 +67,39 @@ func (m *Header) Type() MessageType {
 }
 
 func (m *Header) Serialize(buf *bytes.Buffer) error {
-    var err error = nil
-    binary.Write(buf, binary.LittleEndian, m.Seq)
-    binary.Write(buf, binary.LittleEndian, m.Stamp.Sec)
-    binary.Write(buf, binary.LittleEndian, m.Stamp.NSec)
-    binary.Write(buf, binary.LittleEndian, uint32(len([]byte(m.FrameId))))
-    buf.Write([]byte(m.FrameId))
-    return err
+	var err error = nil
+	binary.Write(buf, binary.LittleEndian, m.Seq)
+	binary.Write(buf, binary.LittleEndian, m.Stamp.Sec)
+	binary.Write(buf, binary.LittleEndian, m.Stamp.NSec)
+	binary.Write(buf, binary.LittleEndian, uint32(len([]byte(m.FrameId))))
+	buf.Write([]byte(m.FrameId))
+	return err
 }
 
-
 func (m *Header) Deserialize(buf *bytes.Reader) error {
-    var err error = nil
-    if err = binary.Read(buf, binary.LittleEndian, &m.Seq); err != nil {
-        return err
-    }
-    {
-        if err = binary.Read(buf, binary.LittleEndian, &m.Stamp.Sec); err != nil {
-            return err
-        }
+	var err error = nil
+	if err = binary.Read(buf, binary.LittleEndian, &m.Seq); err != nil {
+		return err
+	}
+	{
+		if err = binary.Read(buf, binary.LittleEndian, &m.Stamp.Sec); err != nil {
+			return err
+		}
 
-        if err = binary.Read(buf, binary.LittleEndian, &m.Stamp.NSec); err != nil {
-            return err
-        }
-    }
-    {
-        var size uint32
-        if err = binary.Read(buf, binary.LittleEndian, &size); err != nil {
-            return err
-        }
-        data := make([]byte, int(size))
-        if err = binary.Read(buf, binary.LittleEndian, data); err != nil {
-            return err
-        }
-        m.FrameId = string(data)
-    }
-    return err
+		if err = binary.Read(buf, binary.LittleEndian, &m.Stamp.NSec); err != nil {
+			return err
+		}
+	}
+	{
+		var size uint32
+		if err = binary.Read(buf, binary.LittleEndian, &size); err != nil {
+			return err
+		}
+		data := make([]byte, int(size))
+		if err = binary.Read(buf, binary.LittleEndian, data); err != nil {
+			return err
+		}
+		m.FrameId = string(data)
+	}
+	return err
 }

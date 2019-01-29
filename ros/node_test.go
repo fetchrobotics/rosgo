@@ -17,4 +17,3 @@ func TestLoadJsonFromString(t *testing.T) {
 		t.Error(i)
 	}
 }
-

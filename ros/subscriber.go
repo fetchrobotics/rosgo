@@ -35,7 +35,7 @@ type defaultSubscriber struct {
 	addCallbackChan  chan interface{}
 	shutdownChan     chan struct{}
 	connections      map[string]*connectionStats
-	deadConnections  map[string]*connectionStats
+	connIDCount      int
 	disconnectedChan chan string
 }
 
@@ -49,7 +49,7 @@ func newDefaultSubscriber(topic string, msgType MessageType, callback interface{
 	sub.shutdownChan = make(chan struct{}, 10)
 	sub.disconnectedChan = make(chan string, 10)
 	sub.connections = make(map[string]*connectionStats)
-	sub.deadConnections = make(map[string]*connectionStats)
+	sub.connIDCount = 0
 	sub.callbacks = []interface{}{callback}
 	return sub
 }
@@ -75,7 +75,6 @@ func (sub *defaultSubscriber) start(wg *sync.WaitGroup, nodeId string, nodeApiUr
 				quitChan := sub.connections[pub].quitChan
 				quitChan <- struct{}{}
 				if _, ok := sub.connections[pub]; ok {
-					sub.deadConnections[pub] = sub.connections[pub]
 					delete(sub.connections, pub)
 				}
 			}
@@ -97,10 +96,11 @@ func (sub *defaultSubscriber) start(wg *sync.WaitGroup, nodeId string, nodeApiUr
 					uri := fmt.Sprintf("%s:%d", addr, port)
 
 					sub.connections[pub] = new(connectionStats)
-					sub.connections[pub].id = len(sub.connections) + len(sub.connections)
+					sub.connections[pub].id = sub.connIDCount
 					sub.connections[pub].bytesReceived = 0
 					sub.connections[pub].dropEstimate = -1
 					sub.connections[pub].quitChan = make(chan struct{}, 10)
+					sub.connIDCount++
 
 					go startRemotePublisherConn(logger,
 						uri, sub.topic,
@@ -143,8 +143,7 @@ func (sub *defaultSubscriber) start(wg *sync.WaitGroup, nodeId string, nodeApiUr
 		case <-sub.shutdownChan:
 			// Shutdown subscription goroutine
 			logger.Debug("Receive shutdownChan")
-			for pub, connStat := range sub.connections {
-				sub.deadConnections[pub] = sub.connections[pub]
+			for _, connStat := range sub.connections {
 				closeChan := connStat.quitChan
 				closeChan <- struct{}{}
 				close(closeChan)
@@ -271,15 +270,6 @@ func (sub *defaultSubscriber) getSubscriberStats() []interface{} {
 		}
 		subStats = append(subStats, stat)
 	}
-	for _, connStat := range sub.deadConnections {
-		stat := []interface{}{
-			connStat.id,
-			connStat.bytesReceived,
-			-1,
-			true,
-		}
-		subStats = append(subStats, stat)
-	}
 	return subStats
 }
 
@@ -293,17 +283,6 @@ func (sub *defaultSubscriber) getSubscriberInfo() []interface{} {
 			"TCPROS",
 			sub.topic,
 			true,
-		}
-		subInfo = append(subInfo, connInfo)
-	}
-	for destURI, connStat := range sub.deadConnections {
-		connInfo := []interface{}{
-			connStat.id,
-			destURI,
-			"i",
-			"TCPROS",
-			sub.topic,
-			false,
 		}
 		subInfo = append(subInfo, connInfo)
 	}

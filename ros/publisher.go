@@ -49,7 +49,7 @@ func newDefaultPublisher(node *defaultNode,
 	pub.sessionChan = make(chan *remoteSubscriberSession, 10)
 	pub.sessionErrorChan = make(chan error, 10)
 	pub.sessions = list.New()
-	pub.deadSessions = list.New()
+	pub.sesssionIDCount = 0
 	pub.connectCallback = connectCallback
 	pub.disconnectCallback = disconnectCallback
 	if listener, err := net.Listen("tcp", ":0"); err != nil {
@@ -92,7 +92,6 @@ func (pub *defaultPublisher) start(wg *sync.WaitGroup) {
 			if sessionError, ok := err.(*remoteSubscriberSessionError); ok {
 				for e := pub.sessions.Front(); e != nil; e = e.Next() {
 					if e.Value == sessionError.session {
-						pub.deadSessions.PushBack(e)
 						pub.sessions.Remove(e)
 						break
 					}
@@ -109,7 +108,6 @@ func (pub *defaultPublisher) start(wg *sync.WaitGroup) {
 			for e := pub.sessions.Front(); e != nil; e = e.Next() {
 				session := e.Value.(*remoteSubscriberSession)
 				session.quitChan <- struct{}{}
-				pub.deadSessions.PushBack(e)
 			}
 			pub.sessions.Init() // Clear all sessions
 			return
@@ -119,7 +117,7 @@ func (pub *defaultPublisher) start(wg *sync.WaitGroup) {
 
 func (pub *defaultPublisher) listenRemoteSubscriber() {
 	logger := pub.node.logger
-	logger.Debugf("Start listen %s.", pub.listener.Addr().String())
+	logger.Infof("Start listen %s.", pub.listener.Addr().String())
 	defer func() {
 		logger.Debug("defaultPublisher.listenRemoteSubscriber exit")
 	}()
@@ -174,17 +172,6 @@ func (pub *defaultPublisher) getPublisherStats() (uint32, []interface{}) {
 		msgDataSent += session.msgBytesSent
 		pubStats = append(pubStats, stat)
 	}
-	for e := pub.deadSessions.Front(); e != nil; e = e.Next() {
-		session := e.Value.(*remoteSubscriberSession)
-		stat := []interface{}{
-			session.id,
-			session.sizeBytesSent + session.msgBytesSent,
-			session.numSent,
-			false,
-		}
-		msgDataSent += session.msgBytesSent
-		pubStats = append(pubStats, stat)
-	}
 	return msgDataSent, pubStats
 }
 
@@ -194,19 +181,7 @@ func (pub *defaultPublisher) getPublisherInfo() []interface{} {
 		session := e.Value.(*remoteSubscriberSession)
 		stat := []interface{}{
 			session.id,
-			session.conn.RemoteAddr().String(),
-			"o",
-			"TCPROS",
-			session.topic,
-			true,
-		}
-		pubInfo = append(pubInfo, stat)
-	}
-	for e := pub.deadSessions.Front(); e != nil; e = e.Next() {
-		session := e.Value.(*remoteSubscriberSession)
-		stat := []interface{}{
-			session.id,
-			session.conn.RemoteAddr().String(),
+			session.callerId,
 			"o",
 			"TCPROS",
 			session.topic,
@@ -221,6 +196,7 @@ type remoteSubscriberSession struct {
 	id                 int
 	conn               net.Conn
 	nodeId             string
+	callerId           string
 	topic              string
 	typeText           string
 	md5sum             string
@@ -312,15 +288,16 @@ func (session *remoteSubscriberSession) start() {
 	if err != nil {
 		panic(errors.New("Failed to read connection header."))
 	}
-	logger.Debug("TCPROS Connection Header:")
+	logger.Info("TCPROS Connection Header:")
 	headerMap := make(map[string]string)
 	for _, h := range headers {
 		headerMap[h.key] = h.value
-		logger.Debugf("  `%s` = `%s`", h.key, h.value)
+		logger.Infof("  `%s` = `%s`", h.key, h.value)
 	}
 	if headerMap["type"] != session.typeName || headerMap["md5sum"] != session.md5sum {
 		panic(errors.New("Incomatible message type!"))
 	}
+	session.callerId = headerMap["callerid"]
 	ssp.subName = headerMap["callerid"]
 	if session.connectCallback != nil {
 		go session.connectCallback(ssp)

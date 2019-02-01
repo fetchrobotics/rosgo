@@ -134,6 +134,10 @@ func newDefaultNode(name string, args []string) (*defaultNode, error) {
 	node.nonRosArgs = rest
 
 	node.qualifiedName = node.namespace + "/" + node.name
+	if len(node.namespace) == 1 {
+		node.qualifiedName = node.namespace + node.name
+	}
+
 	node.subscribers = make(map[string]*defaultSubscriber)
 	node.servers = make(map[string]*defaultServiceServer)
 	node.interruptChan = make(chan os.Signal)
@@ -227,20 +231,18 @@ func (node *defaultNode) getBusStats(callerId string) (interface{}, error) {
 	serviceStats := []interface{}{}
 
 	stats := []interface{}{publishStats, subscribeStats, serviceStats}
-	return buildRosApiResult(-1, "Success", stats), nil
+	return buildRosApiResult(ApiStatusSuccess, "bus stats", stats), nil
 }
 
 func (node *defaultNode) getBusInfo(callerId string) (interface{}, error) {
 	publishInfo := []interface{}{}
-	for t, p := range node.publishers {
-		data := []interface{}{t, p.getPublisherInfo()}
-		publishInfo = append(publishInfo, data)
+	for _, p := range node.publishers {
+		publishInfo = append(publishInfo, p.getPublisherInfo()...)
 	}
 
 	subscribeInfo := []interface{}{}
-	for t, s := range node.subscribers {
-		data := []interface{}{t, s.getSubscriberInfo()}
-		subscribeInfo = append(subscribeInfo, data)
+	for _, s := range node.subscribers {
+		subscribeInfo = append(subscribeInfo, s.getSubscriberInfo()...)
 	}
 
 	serviceInfo := []interface{}{}
@@ -250,7 +252,7 @@ func (node *defaultNode) getBusInfo(callerId string) (interface{}, error) {
 	info = append(info, subscribeInfo...)
 	info = append(info, serviceInfo...)
 
-	return buildRosApiResult(-1, "Success", info), nil
+	return buildRosApiResult(ApiStatusSuccess, "bus info", info), nil
 }
 
 func (node *defaultNode) getMasterUri(callerId string) (interface{}, error) {

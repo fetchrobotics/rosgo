@@ -113,7 +113,7 @@ func (pub *defaultPublisher) start(wg *sync.WaitGroup) {
 
 func (pub *defaultPublisher) listenRemoteSubscriber() {
 	logger := pub.node.logger
-	logger.Infof("Start listen %s.", pub.listener.Addr().String())
+	logger.Debugf("Start listen %s.", pub.listener.Addr().String())
 	defer func() {
 		logger.Debug("defaultPublisher.listenRemoteSubscriber exit")
 	}()
@@ -286,11 +286,11 @@ func (session *remoteSubscriberSession) start() {
 	if err != nil {
 		panic(errors.New("Failed to read connection header."))
 	}
-	logger.Info("TCPROS Connection Header:")
+	logger.Debug("TCPROS Connection Header:")
 	headerMap := make(map[string]string)
 	for _, h := range headers {
 		headerMap[h.key] = h.value
-		logger.Infof("  `%s` = `%s`", h.key, h.value)
+		logger.Debugf("  `%s` = `%s`", h.key, h.value)
 	}
 	if headerMap["type"] != session.typeName || headerMap["md5sum"] != session.md5sum {
 		panic(errors.New("Incomatible message type!"))

@@ -3,10 +3,11 @@ package main
 //go:generate gengo srv rospy_tutorials/AddTwoInts
 import (
 	"fmt"
-	"github.com/fetchrobotics/rosgo/ros"
 	"os"
 	"rospy_tutorials"
 	"strconv"
+
+	"github.com/fetchrobotics/rosgo/ros"
 )
 
 func main() {

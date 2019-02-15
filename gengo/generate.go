@@ -32,7 +32,6 @@ const (
 )
 {{- end }}
 
-
 type _Msg{{ .ShortName }} struct {
     text string
     name string
@@ -96,7 +95,7 @@ func (m *{{ .ShortName }}) Type() ros.MessageType {
 }
 
 func (m *{{ .ShortName }}) Serialize(buf *bytes.Buffer) error {
-    var err error = nil
+    var err error
 {{- range .Fields }}
 {{-     if .IsArray }}
     binary.Write(buf, binary.LittleEndian, uint32(len(m.{{ .GoName }})))
@@ -147,7 +146,6 @@ func (m *{{ .ShortName }}) Deserialize(buf *bytes.Reader) error {
     var err error = nil
 {{- range .Fields }}
 {{-    if .IsArray }}
-    {
         var size uint32
         if err = binary.Read(buf, binary.LittleEndian, &size); err != nil {
             return err
@@ -158,7 +156,6 @@ func (m *{{ .ShortName }}) Deserialize(buf *bytes.Reader) error {
         for i := 0; i < int(size); i++ {
 {{-          if .IsBuiltin }}
 {{-              if eq .Type "string" }}
-            {
                 var size uint32
                 if err = binary.Read(buf, binary.LittleEndian, &size); err != nil {
                     return err
@@ -168,10 +165,8 @@ func (m *{{ .ShortName }}) Deserialize(buf *bytes.Reader) error {
                     return err
                 }
                 m.{{ .GoName }}[i] = string(data)
-            }
 {{-              else }}
 {{- 					if or (eq .Type "time") (eq .Type "duration") }}
-            {
                 if err = binary.Read(buf, binary.LittleEndian, &m.{{ .GoName }}[i].Sec); err != nil {
                     return err
                 }
@@ -179,7 +174,6 @@ func (m *{{ .ShortName }}) Deserialize(buf *bytes.Reader) error {
                 if err = binary.Read(buf, binary.LittleEndian, &m.{{ .GoName }}[i].NSec); err != nil {
                     return err
                 }
-            }
 {{-                  else }}
             if err = binary.Read(buf, binary.LittleEndian, &m.{{ .GoName }}[i]); err != nil {
                 return err
@@ -192,11 +186,9 @@ func (m *{{ .ShortName }}) Deserialize(buf *bytes.Reader) error {
             }
 {{-      	end }}
         }
-    }
 {{-    else }}
 {{-        if .IsBuiltin }}
 {{-            if eq .Type "string" }}
-    {
         var size uint32
         if err = binary.Read(buf, binary.LittleEndian, &size); err != nil {
             return err
@@ -206,10 +198,8 @@ func (m *{{ .ShortName }}) Deserialize(buf *bytes.Reader) error {
             return err
         }
         m.{{ .GoName }} = string(data)
-    }
 {{-            else }}
 {{-            		if or (eq .Type "time") (eq .Type "duration") }}
-    {
         if err = binary.Read(buf, binary.LittleEndian, &m.{{ .GoName }}.Sec); err != nil {
             return err
         }
@@ -217,7 +207,6 @@ func (m *{{ .ShortName }}) Deserialize(buf *bytes.Reader) error {
         if err = binary.Read(buf, binary.LittleEndian, &m.{{ .GoName }}.NSec); err != nil {
             return err
         }
-    }
 {{-            		else }}
     if err = binary.Read(buf, binary.LittleEndian, &m.{{ .GoName }}); err != nil {
         return err
@@ -233,6 +222,33 @@ func (m *{{ .ShortName }}) Deserialize(buf *bytes.Reader) error {
 {{- end }}
     return err
 }
+
+{{- if .IsAction }}
+{{- range .Fields }}
+{{-     if or (eq .GoName "Goal") (eq .GoName "Feedback") (eq .GoName "Result") }} 
+            
+            func (m *{{ $.ShortName }}) Get{{ .GoName }}() ros.Message {
+                return &m.{{ .GoName }}
+            }
+
+            func (m *{{ $.ShortName }}) Set{{ .GoName }}(s ros.Message) {
+                msg := s.(*{{ .GoType }})
+                m.{{ .GoName }} = *msg
+            }
+
+{{-     else}}
+            
+            func (m *{{ $.ShortName }}) Get{{ .GoName }}() {{ .GoType }} {
+                return m.{{ .GoName }}
+            }
+
+            func (m *{{ $.ShortName }}) Set{{ .GoName }}(s {{ .GoType }}) {
+                m.{{ .GoName }} = s
+            }
+
+{{-     end}}
+{{- end }}
+{{- end}}
 `
 
 var srvTemplate = `
@@ -284,6 +300,7 @@ var actionTemplate = `
 // Automatically generated from the message definition "{{ .FullName }}.action"
 package {{ .Package }}
 import (
+    "github.com/fetchrobotics/rosgo/actionlib"
     "github.com/fetchrobotics/rosgo/ros"
 )
 
@@ -303,7 +320,7 @@ func (t *_Action{{ .ShortName }}) Text() string { return t.text }
 func (t *_Action{{ .ShortName }}) GoalType() ros.MessageType { return t.goalType }
 func (t *_Action{{ .ShortName }}) FeedbackType() ros.MessageType { return t.feedbackType }
 func (t *_Action{{ .ShortName }}) ResultType() ros.MessageType { return t.resultType }
-func (t *_Action{{ .ShortName }}) NewAction() ros.Action {
+func (t *_Action{{ .ShortName }}) NewAction() actionlib.Action {
     return new({{ .ShortName }})
 }
 
@@ -325,14 +342,15 @@ type {{ .ShortName }} struct {
     Result {{ .ShortName }}ActionResult
 }
 
-func (s *{{ .ShortName }}) GoalMessage() ros.Message { return &s.Goal }
-func (s *{{ .ShortName }}) FeedbackMessage() ros.Message { return &s.Feedback }
-func (s *{{ .ShortName }}) ResultMessage() ros.Message { return &s.Result }
+func (s *{{ .ShortName }}) GetActionGoal() actionlib.ActionGoal         { return &s.Goal }
+func (s *{{ .ShortName }}) GetActionFeedback() actionlib.ActionFeedback { return &s.Feedback }
+func (s *{{ .ShortName }}) GetActionResult() actionlib.ActionResult     { return &s.Result }
 `
 
 type MsgGen struct {
 	MsgSpec
 	BinaryRequired bool
+	IsAction       bool
 	Imports        []string
 }
 
@@ -365,8 +383,9 @@ OUTER:
 	}
 }
 
-func GenerateMessage(context *MsgContext, spec *MsgSpec) (string, error) {
+func GenerateMessage(context *MsgContext, spec *MsgSpec, isAction bool) (string, error) {
 	var gen MsgGen
+	gen.IsAction = isAction
 	gen.Fields = spec.Fields
 	gen.Constants = spec.Constants
 	gen.Text = spec.Text
@@ -392,11 +411,11 @@ func GenerateMessage(context *MsgContext, spec *MsgSpec) (string, error) {
 }
 
 func GenerateService(context *MsgContext, spec *SrvSpec) (string, string, string, error) {
-	reqCode, err := GenerateMessage(context, spec.Request)
+	reqCode, err := GenerateMessage(context, spec.Request, false)
 	if err != nil {
 		return "", "", "", err
 	}
-	resCode, err := GenerateMessage(context, spec.Response)
+	resCode, err := GenerateMessage(context, spec.Response, false)
 	if err != nil {
 		return "", "", "", err
 	}
@@ -416,27 +435,27 @@ func GenerateService(context *MsgContext, spec *SrvSpec) (string, string, string
 }
 
 func GenerateAction(context *MsgContext, spec *ActionSpec) (string, string, string, string, string, string, string, error) {
-	goalCode, err := GenerateMessage(context, spec.Goal)
+	goalCode, err := GenerateMessage(context, spec.Goal, false)
 	if err != nil {
 		return "", "", "", "", "", "", "", err
 	}
-	goalActionCode, err := GenerateMessage(context, spec.ActionGoal)
+	goalActionCode, err := GenerateMessage(context, spec.ActionGoal, true)
 	if err != nil {
 		return "", "", "", "", "", "", "", err
 	}
-	resultCode, err := GenerateMessage(context, spec.Result)
+	resultCode, err := GenerateMessage(context, spec.Result, false)
 	if err != nil {
 		return "", "", "", "", "", "", "", err
 	}
-	resultActionCode, err := GenerateMessage(context, spec.ActionResult)
+	resultActionCode, err := GenerateMessage(context, spec.ActionResult, true)
 	if err != nil {
 		return "", "", "", "", "", "", "", err
 	}
-	feedbackCode, err := GenerateMessage(context, spec.Feedback)
+	feedbackCode, err := GenerateMessage(context, spec.Feedback, false)
 	if err != nil {
 		return "", "", "", "", "", "", "", err
 	}
-	feedbackActionCode, err := GenerateMessage(context, spec.ActionFeedback)
+	feedbackActionCode, err := GenerateMessage(context, spec.ActionFeedback, true)
 	if err != nil {
 		return "", "", "", "", "", "", "", err
 	}

@@ -3,9 +3,10 @@ package main
 //go:generate gengo srv rospy_tutorials/AddTwoInts
 import (
 	"fmt"
-	"github.com/fetchrobotics/rosgo/ros"
 	"os"
 	"rospy_tutorials"
+
+	"github.com/fetchrobotics/rosgo/ros"
 )
 
 func callback(srv *rospy_tutorials.AddTwoInts) error {

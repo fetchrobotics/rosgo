@@ -41,7 +41,7 @@ func readConnectionHeader(r io.Reader) ([]header, error) {
 	}
 	fmt.Print("didn't crash")
 
-	var done uint32 = 0
+	var done uint32
 	var headers []header
 	bufReader = bytes.NewBuffer(buf)
 	for {

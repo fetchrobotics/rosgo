@@ -48,7 +48,7 @@ func generateMessageFromSpec(context *MsgContext, names ...string) error {
 	if err != nil {
 		return err
 	}
-	code, err := GenerateMessage(context, spec)
+	code, err := GenerateMessage(context, spec, false)
 	if err != nil {
 		return err
 	}
@@ -95,7 +95,7 @@ func main() {
 			os.Exit(-1)
 		}
 		var code string
-		code, err = GenerateMessage(context, spec)
+		code, err = GenerateMessage(context, spec, false)
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(-1)

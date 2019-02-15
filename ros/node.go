@@ -18,9 +18,9 @@ import (
 )
 
 const (
-	ApiStatusError   = -1
-	ApiStatusFailure = 0
-	ApiStatusSuccess = 1
+	APIStatusError   = -1
+	APIStatusFailure = 0
+	APIStatusSuccess = 1
 	Remap            = ":="
 )
 
@@ -54,26 +54,26 @@ type defaultNode struct {
 	name           string
 	namespace      string
 	qualifiedName  string
-	masterUri      string
-	xmlrpcUri      string
+	masterURI      string
+	xmlrpcURI      string
 	xmlrpcListener net.Listener
 	xmlrpcHandler  *xmlrpc.Handler
 	subscribers    map[string]*defaultSubscriber
 	publishers     sync.Map
 	servers        map[string]*defaultServiceServer
-	actions        map[string]*defaultActionServer
-	jobChan        chan func()
-	interruptChan  chan os.Signal
-	logger         Logger
-	ok             bool
-	okMutex        sync.RWMutex
-	waitGroup      sync.WaitGroup
-	logDir         string
-	hostname       string
-	listenIp       string
-	homeDir        string
-	nameResolver   *NameResolver
-	nonRosArgs     []string
+	// actions        map[string]*defaultActionServer
+	jobChan       chan func()
+	interruptChan chan os.Signal
+	logger        Logger
+	ok            bool
+	okMutex       sync.RWMutex
+	waitGroup     sync.WaitGroup
+	logDir        string
+	hostname      string
+	listenIP      string
+	homeDir       string
+	nameResolver  *NameResolver
+	nonRosArgs    []string
 }
 
 func newDefaultNode(name string, args []string) (*defaultNode, error) {
@@ -121,14 +121,14 @@ func newDefaultNode(name string, args []string) (*defaultNode, error) {
 		onlyLocalhost = (value == "::1" || strings.HasPrefix(value, "127."))
 	}
 	if onlyLocalhost {
-		node.listenIp = "127.0.0.1"
+		node.listenIP = "127.0.0.1"
 	} else {
-		node.listenIp = "0.0.0.0"
+		node.listenIP = "0.0.0.0"
 	}
 
-	node.masterUri = os.Getenv("ROS_MASTER_URI")
+	node.masterURI = os.Getenv("ROS_MASTER_URI")
 	if value, ok := specials["__master"]; ok {
-		node.masterUri = value
+		node.masterURI = value
 	}
 
 	node.nameResolver = newNameResolver(node.namespace, node.name, remapping)
@@ -141,7 +141,6 @@ func newDefaultNode(name string, args []string) (*defaultNode, error) {
 
 	node.subscribers = make(map[string]*defaultSubscriber)
 	node.servers = make(map[string]*defaultServiceServer)
-	node.actions = make(map[string]*defaultActionServer)
 	node.interruptChan = make(chan os.Signal)
 	node.ok = true
 
@@ -160,11 +159,11 @@ func newDefaultNode(name string, args []string) (*defaultNode, error) {
 
 	node.jobChan = make(chan func(), 100)
 
-	logger.Debugf("Master URI = %s", node.masterUri)
+	logger.Debugf("Master URI = %s", node.masterURI)
 
 	// Set parameters set by arguments
 	for k, v := range params {
-		_, err := callRosApi(node.masterUri, "setParam", node.qualifiedName, k, v)
+		_, err := callRosAPI(node.masterURI, "setParam", node.qualifiedName, k, v)
 		if err != nil {
 			return nil, err
 		}
@@ -180,25 +179,25 @@ func newDefaultNode(name string, args []string) (*defaultNode, error) {
 		// Not reached
 		panic(err)
 	}
-	node.xmlrpcUri = fmt.Sprintf("http://%s:%s", node.hostname, port)
+	node.xmlrpcURI = fmt.Sprintf("http://%s:%s", node.hostname, port)
 	logger.Debugf("listen on http://%s", listener.Addr().String())
 	node.xmlrpcListener = listener
 	m := map[string]xmlrpc.Method{
-		"getBusStats":      func(callerId string) (interface{}, error) { return node.getBusStats(callerId) },
-		"getBusInfo":       func(callerId string) (interface{}, error) { return node.getBusInfo(callerId) },
-		"getMasterUri":     func(callerId string) (interface{}, error) { return node.getMasterUri(callerId) },
-		"shutdown":         func(callerId string, msg string) (interface{}, error) { return node.shutdown(callerId, msg) },
-		"getPid":           func(callerId string) (interface{}, error) { return node.getPid(callerId) },
-		"getSubscriptions": func(callerId string) (interface{}, error) { return node.getSubscriptions(callerId) },
-		"getPublications":  func(callerId string) (interface{}, error) { return node.getPublications(callerId) },
-		"paramUpdate": func(callerId string, key string, value interface{}) (interface{}, error) {
-			return node.paramUpdate(callerId, key, value)
+		"getBusStats":      func(callerID string) (interface{}, error) { return node.getBusStats(callerID) },
+		"getBusInfo":       func(callerID string) (interface{}, error) { return node.getBusInfo(callerID) },
+		"getMasterUri":     func(callerID string) (interface{}, error) { return node.getmasterURI(callerID) },
+		"shutdown":         func(callerID string, msg string) (interface{}, error) { return node.shutdown(callerID, msg) },
+		"getPid":           func(callerID string) (interface{}, error) { return node.getPid(callerID) },
+		"getSubscriptions": func(callerID string) (interface{}, error) { return node.getSubscriptions(callerID) },
+		"getPublications":  func(callerID string) (interface{}, error) { return node.getPublications(callerID) },
+		"paramUpdate": func(callerID string, key string, value interface{}) (interface{}, error) {
+			return node.paramUpdate(callerID, key, value)
 		},
-		"publisherUpdate": func(callerId string, topic string, publishers []interface{}) (interface{}, error) {
-			return node.publisherUpdate(callerId, topic, publishers)
+		"publisherUpdate": func(callerID string, topic string, publishers []interface{}) (interface{}, error) {
+			return node.publisherUpdate(callerID, topic, publishers)
 		},
-		"requestTopic": func(callerId string, topic string, protocols []interface{}) (interface{}, error) {
-			return node.requestTopic(callerId, topic, protocols)
+		"requestTopic": func(callerID string, topic string, protocols []interface{}) (interface{}, error) {
+			return node.requestTopic(callerID, topic, protocols)
 		},
 	}
 	node.xmlrpcHandler = xmlrpc.NewHandler(m)
@@ -214,7 +213,7 @@ func (node *defaultNode) OK() bool {
 	return ok
 }
 
-func (node *defaultNode) getBusStats(callerId string) (interface{}, error) {
+func (node *defaultNode) getBusStats(callerID string) (interface{}, error) {
 	publishStats := []interface{}{}
 	for t, p := range node.publishers {
 		var msgDataSent uint32
@@ -233,10 +232,10 @@ func (node *defaultNode) getBusStats(callerId string) (interface{}, error) {
 	serviceStats := []interface{}{}
 
 	stats := []interface{}{publishStats, subscribeStats, serviceStats}
-	return buildRosApiResult(ApiStatusSuccess, "bus stats", stats), nil
+	return buildRosAPIResult(APIStatusSuccess, "bus stats", stats), nil
 }
 
-func (node *defaultNode) getBusInfo(callerId string) (interface{}, error) {
+func (node *defaultNode) getBusInfo(callerID string) (interface{}, error) {
 	publishInfo := []interface{}{}
 	for _, p := range node.publishers {
 		publishInfo = append(publishInfo, p.getPublisherInfo()...)
@@ -254,34 +253,34 @@ func (node *defaultNode) getBusInfo(callerId string) (interface{}, error) {
 	info = append(info, subscribeInfo...)
 	info = append(info, serviceInfo...)
 
-	return buildRosApiResult(ApiStatusSuccess, "bus info", info), nil
+	return buildRosAPIResult(APIStatusSuccess, "bus info", info), nil
 }
 
-func (node *defaultNode) getMasterUri(callerId string) (interface{}, error) {
-	return buildRosApiResult(0, "Success", node.masterUri), nil
+func (node *defaultNode) getmasterURI(callerID string) (interface{}, error) {
+	return buildRosAPIResult(0, "Success", node.masterURI), nil
 }
 
-func (node *defaultNode) shutdown(callerId string, msg string) (interface{}, error) {
+func (node *defaultNode) shutdown(callerID string, msg string) (interface{}, error) {
 	node.okMutex.Lock()
 	node.ok = false
 	node.okMutex.Unlock()
-	return buildRosApiResult(0, "Success", 0), nil
+	return buildRosAPIResult(0, "Success", 0), nil
 }
 
-func (node *defaultNode) getPid(callerId string) (interface{}, error) {
-	return buildRosApiResult(0, "Success", os.Getpid()), nil
+func (node *defaultNode) getPid(callerID string) (interface{}, error) {
+	return buildRosAPIResult(0, "Success", os.Getpid()), nil
 }
 
-func (node *defaultNode) getSubscriptions(callerId string) (interface{}, error) {
+func (node *defaultNode) getSubscriptions(callerID string) (interface{}, error) {
 	result := []interface{}{}
 	for t, s := range node.subscribers {
 		pair := []interface{}{t, s.msgType.Name()}
 		result = append(result, pair)
 	}
-	return buildRosApiResult(0, "Success", result), nil
+	return buildRosAPIResult(0, "Success", result), nil
 }
 
-func (node *defaultNode) getPublications(callerId string) (interface{}, error) {
+func (node *defaultNode) getPublications(callerID string) (interface{}, error) {
 	result := []interface{}{}
 	node.publishers.Range(func(t interface{}, p interface{}) bool {
 		pair := []interface{}{
@@ -295,11 +294,11 @@ func (node *defaultNode) getPublications(callerId string) (interface{}, error) {
 	return buildRosApiResult(0, "Success", result), nil
 }
 
-func (node *defaultNode) paramUpdate(callerId string, key string, value interface{}) (interface{}, error) {
-	return buildRosApiResult(-1, "Not implemented", 0), nil
+func (node *defaultNode) paramUpdate(callerID string, key string, value interface{}) (interface{}, error) {
+	return buildRosAPIResult(-1, "Not implemented", 0), nil
 }
 
-func (node *defaultNode) publisherUpdate(callerId string, topic string, publishers []interface{}) (interface{}, error) {
+func (node *defaultNode) publisherUpdate(callerID string, topic string, publishers []interface{}) (interface{}, error) {
 	node.logger.Debug("Slave API publisherUpdate() called.")
 	var code int32
 	var message string
@@ -308,19 +307,19 @@ func (node *defaultNode) publisherUpdate(callerId string, topic string, publishe
 		code = 0
 		message = "No such topic"
 	} else {
-		pubUris := make([]string, len(publishers))
-		for i, uri := range publishers {
-			pubUris[i] = uri.(string)
+		pubURIs := make([]string, len(publishers))
+		for i, URI := range publishers {
+			pubURIs[i] = URI.(string)
 		}
-		sub.pubListChan <- pubUris
+		sub.pubListChan <- pubURIs
 		code = 1
 		message = "Success"
 	}
-	return buildRosApiResult(code, message, 0), nil
+	return buildRosAPIResult(code, message, 0), nil
 }
 
-func (node *defaultNode) requestTopic(callerId string, topic string, protocols []interface{}) (interface{}, error) {
-	node.logger.Debugf("Slave API requestTopic(%s, %s, ...) called.", callerId, topic)
+func (node *defaultNode) requestTopic(callerID string, topic string, protocols []interface{}) (interface{}, error) {
+	node.logger.Debugf("Slave API requestTopic(%s, %s, ...) called.", callerID, topic)
 	var code int32
 	var message string
 	var value interface{}
@@ -353,7 +352,7 @@ func (node *defaultNode) requestTopic(callerId string, topic string, protocols [
 		message = "Success"
 		value = selectedProtocol
 	}
-	return buildRosApiResult(code, message, value), nil
+	return buildRosAPIResult(code, message, value), nil
 }
 
 func (node *defaultNode) NewPublisher(topic string, msgType MessageType) Publisher {
@@ -366,10 +365,10 @@ func (node *defaultNode) NewPublisherWithCallbacks(topic string, msgType Message
 	pub, ok := node.publishers.Load(topic)
 	logger := node.logger
 	if !ok {
-		_, err := callRosApi(node.masterUri, "registerPublisher",
+		_, err := callRosAPI(node.masterURI, "registerPublisher",
 			node.qualifiedName,
 			name, msgType.Name(),
-			node.xmlrpcUri)
+			node.xmlrpcURI)
 		if err != nil {
 			logger.Fatalf("Failed to call registerPublisher(): %s", err)
 		}
@@ -387,11 +386,11 @@ func (node *defaultNode) NewSubscriber(topic string, msgType MessageType, callba
 	logger := node.logger
 	if !ok {
 		node.logger.Debug("Call Master API registerSubscriber")
-		result, err := callRosApi(node.masterUri, "registerSubscriber",
+		result, err := callRosAPI(node.masterURI, "registerSubscriber",
 			node.qualifiedName,
 			name,
 			msgType.Name(),
-			node.xmlrpcUri)
+			node.xmlrpcURI)
 		if err != nil {
 			logger.Fatalf("Failed to call registerSubscriber() for %s.", err)
 		}
@@ -414,7 +413,7 @@ func (node *defaultNode) NewSubscriber(topic string, msgType MessageType, callba
 		node.subscribers[name] = sub
 
 		logger.Debugf("Start subscriber goroutine for topic '%s'", sub.topic)
-		go sub.start(&node.waitGroup, node.masterUri, node.qualifiedName, node.xmlrpcUri, node.jobChan, logger)
+		go sub.start(&node.waitGroup, node.masterURI, node.qualifiedName, node.xmlrpcURI, node.jobChan, logger)
 		logger.Debugf("Done")
 		sub.pubListChan <- publishers
 		logger.Debugf("Update publisher list for topic '%s'", sub.topic)
@@ -426,7 +425,7 @@ func (node *defaultNode) NewSubscriber(topic string, msgType MessageType, callba
 
 func (node *defaultNode) NewServiceClient(service string, srvType ServiceType) ServiceClient {
 	name := node.nameResolver.remap(service)
-	client := newDefaultServiceClient(node.logger, node.qualifiedName, node.masterUri, name, srvType)
+	client := newDefaultServiceClient(node.logger, node.qualifiedName, node.masterURI, name, srvType)
 	return client
 }
 
@@ -442,20 +441,6 @@ func (node *defaultNode) NewServiceServer(service string, srvType ServiceType, h
 	}
 	node.servers[name] = server
 	return server
-}
-
-func (node *defaultNode) NewActionServer(action string, actionType ActionType, handler interface{}, start bool) ActionServer {
-	name := node.nameResolver.remap(action)
-	a, ok := node.actions[name]
-	if ok {
-		a.Shutdown()
-	}
-	a = newDefaultActionServer(node, action, actionType, handler, 1, start)
-	if a == nil {
-		return nil
-	}
-	node.actions[name] = a
-	return a
 }
 
 func (node *defaultNode) SpinOnce() {
@@ -518,18 +503,18 @@ func (node *defaultNode) Shutdown() {
 
 func (node *defaultNode) GetParam(key string) (interface{}, error) {
 	name := node.nameResolver.remap(key)
-	return callRosApi(node.masterUri, "getParam", node.qualifiedName, name)
+	return callRosAPI(node.masterURI, "getParam", node.qualifiedName, name)
 }
 
 func (node *defaultNode) SetParam(key string, value interface{}) error {
 	name := node.nameResolver.remap(key)
-	_, e := callRosApi(node.masterUri, "setParam", node.qualifiedName, name, value)
+	_, e := callRosAPI(node.masterURI, "setParam", node.qualifiedName, name, value)
 	return e
 }
 
 func (node *defaultNode) HasParam(key string) (bool, error) {
 	name := node.nameResolver.remap(key)
-	result, err := callRosApi(node.masterUri, "hasParam", node.qualifiedName, name)
+	result, err := callRosAPI(node.masterURI, "hasParam", node.qualifiedName, name)
 	if err != nil {
 		return false, err
 	}
@@ -538,7 +523,7 @@ func (node *defaultNode) HasParam(key string) (bool, error) {
 }
 
 func (node *defaultNode) SearchParam(key string) (string, error) {
-	result, err := callRosApi(node.masterUri, "searchParam", node.qualifiedName, key)
+	result, err := callRosAPI(node.masterURI, "searchParam", node.qualifiedName, key)
 	if err != nil {
 		return "", err
 	}
@@ -548,7 +533,7 @@ func (node *defaultNode) SearchParam(key string) (string, error) {
 
 func (node *defaultNode) DeleteParam(key string) error {
 	name := node.nameResolver.remap(key)
-	_, err := callRosApi(node.masterUri, "deleteParam", node.qualifiedName, name)
+	_, err := callRosAPI(node.masterURI, "deleteParam", node.qualifiedName, name)
 	return err
 }
 

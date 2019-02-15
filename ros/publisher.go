@@ -101,7 +101,7 @@ func (pub *defaultPublisher) start(wg *sync.WaitGroup) {
 			logger.Debug("defaultPublisher.start Receive shutdownChan")
 			pub.listener.Close()
 			logger.Debug("defaultPublisher.start closed listener")
-			_, err := callRosApi(pub.node.masterUri, "unregisterPublisher", pub.node.qualifiedName, pub.topic, pub.node.xmlrpcUri)
+			_, err := callRosAPI(pub.node.masterURI, "unregisterPublisher", pub.node.qualifiedName, pub.topic, pub.node.xmlrpcURI)
 			if err != nil {
 				logger.Warn(err)
 			}
@@ -181,7 +181,7 @@ func (pub *defaultPublisher) getPublisherInfo() []interface{} {
 		session := e.Value.(*remoteSubscriberSession)
 		stat := []interface{}{
 			session.id,
-			session.callerId,
+			session.callerID,
 			"o",
 			"TCPROS",
 			session.topic,
@@ -195,8 +195,8 @@ func (pub *defaultPublisher) getPublisherInfo() []interface{} {
 type remoteSubscriberSession struct {
 	id                 int
 	conn               net.Conn
-	nodeId             string
-	callerId           string
+	nodeID             string
+	callerID           string
 	topic              string
 	typeText           string
 	md5sum             string
@@ -216,7 +216,7 @@ func newRemoteSubscriberSession(pub *defaultPublisher, id int, conn net.Conn) *r
 	session := new(remoteSubscriberSession)
 	session.id = id
 	session.conn = conn
-	session.nodeId = pub.node.qualifiedName
+	session.nodeID = pub.node.qualifiedName
 	session.topic = pub.topic
 	session.typeText = pub.msgType.Text()
 	session.md5sum = pub.msgType.MD5Sum()
@@ -260,7 +260,7 @@ func (session *remoteSubscriberSession) start() {
 	ssp := &singleSubPub{
 		topic:   session.topic,
 		msgChan: session.msgChan,
-		// callerId is filled in after header gets read later in this function.
+		// callerID is filled in after header gets read later in this function.
 	}
 
 	defer func() {
@@ -297,8 +297,8 @@ func (session *remoteSubscriberSession) start() {
 	if headerMap["type"] != session.typeName || headerMap["md5sum"] != session.md5sum {
 		panic(errors.New("Incomatible message type!"))
 	}
-	session.callerId = headerMap["callerid"]
-	ssp.subName = headerMap["callerid"]
+	session.callerID = headerMap["callerID"]
+	ssp.subName = headerMap["callerID"]
 	if session.connectCallback != nil {
 		go session.connectCallback(ssp)
 	}
@@ -306,7 +306,7 @@ func (session *remoteSubscriberSession) start() {
 	// 2. Return reponse header
 	var resHeaders []header
 	resHeaders = append(resHeaders, header{"message_definition", session.typeText})
-	resHeaders = append(resHeaders, header{"callerid", session.nodeId})
+	resHeaders = append(resHeaders, header{"callerID", session.nodeID})
 	resHeaders = append(resHeaders, header{"latching", "0"})
 	resHeaders = append(resHeaders, header{"md5sum", session.md5sum})
 	resHeaders = append(resHeaders, header{"topic", session.topic})

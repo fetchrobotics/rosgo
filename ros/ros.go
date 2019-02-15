@@ -23,7 +23,6 @@ type Node interface {
 	NewSubscriber(topic string, msgType MessageType, callback interface{}) Subscriber
 	NewServiceClient(service string, srvType ServiceType) ServiceClient
 	NewServiceServer(service string, srvType ServiceType, callback interface{}) ServiceServer
-	NewActionServer(action string, actionType ActionType, callback interface{}, start bool) ActionServer
 
 	OK() bool
 	SpinOnce()
@@ -50,8 +49,8 @@ type Publisher interface {
 	Shutdown()
 }
 
-// A publisher which only sends to one specific subscriber.  This is
-// sent as an argument to the connect and disconnect callback
+// SingleSubscriberPublisher is a publisher which only sends to one specific subscriber.
+// This is sent as an argument to the connect and disconnect callback
 // functions passed to Node.NewPublisherWithCallbacks().
 type SingleSubscriberPublisher interface {
 	Publish(msg Message)
@@ -64,7 +63,7 @@ type Subscriber interface {
 	Shutdown()
 }
 
-// Optional second argument to a Subscriber callback.
+// MessageEvent is an optional second argument to a Subscriber callback.
 type MessageEvent struct {
 	PublisherName    string
 	ReceiptTime      time.Time
@@ -84,9 +83,5 @@ type ServiceServer interface {
 
 type ServiceClient interface {
 	Call(srv Service) error
-	Shutdown()
-}
-
-type ActionServer interface {
 	Shutdown()
 }

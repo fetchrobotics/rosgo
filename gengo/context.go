@@ -161,15 +161,11 @@ func (ctx *MsgContext) LoadMsgFromFile(filePath string, fullname string) (*MsgSp
 }
 
 func (ctx *MsgContext) LoadMsg(fullname string) (*MsgSpec, error) {
-	fmt.Println("HELLO")
 	if spec, ok := ctx.msgRegistry[fullname]; ok {
-		fmt.Println("HELLO")
 		return spec, nil
 	} else {
 		if path, ok := ctx.msgPathMap[fullname]; ok {
-			fmt.Println("JIJNPO")
 			spec, err := ctx.LoadMsgFromFile(path, fullname)
-			fmt.Println(spec)
 			if err != nil {
 				return nil, err
 			} else {
@@ -177,7 +173,6 @@ func (ctx *MsgContext) LoadMsg(fullname string) (*MsgSpec, error) {
 				return spec, nil
 			}
 		} else {
-			fmt.Println("JIJNPOff")
 			return nil, fmt.Errorf("Message definition of `%s` is not found", fullname)
 		}
 	}
@@ -254,7 +249,6 @@ func (ctx *MsgContext) LoadActionFromString(text string, fullname string) (*Acti
 	goalText := components[0]
 	feedbackText := components[1]
 	resultText := components[2]
-	fmt.Println(fullname)
 	goalSpec, err := ctx.LoadMsgFromString(goalText, fullname+"Goal")
 	if err != nil {
 		return nil, err

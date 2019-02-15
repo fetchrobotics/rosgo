@@ -159,7 +159,7 @@ func newRemoteClientSession(s *defaultServiceServer, conn net.Conn) *remoteClien
 func (s *remoteClientSession) start() {
 	logger := s.server.node.logger
 	conn := s.conn
-	nodeId := s.server.node.qualifiedName
+	nodeID := s.server.node.qualifiedName
 	service := s.server.service
 	md5sum := s.server.srvType.MD5Sum()
 	srvType := s.server.srvType.Name()
@@ -199,7 +199,7 @@ func (s *remoteClientSession) start() {
 	headers = append(headers, header{"service", service})
 	headers = append(headers, header{"md5sum", md5sum})
 	headers = append(headers, header{"type", srvType})
-	headers = append(headers, header{"callerid", nodeId})
+	headers = append(headers, header{"callerid", nodeID})
 	logger.Debug("TCPROS Response Header")
 	for _, h := range headers {
 		logger.Debugf("  `%s` = `%s`", h.key, h.value)
@@ -288,7 +288,7 @@ func (s *remoteClientSession) start() {
 	case err := <-s.errorChan:
 		logger.Error(err)
 		// 4. Write OK byte
-		var ok byte = 0
+		var ok byte
 		conn.SetDeadline(time.Now().Add(10 * time.Millisecond))
 		if err := binary.Write(conn, binary.LittleEndian, &ok); err != nil {
 			panic(err)

@@ -8,10 +8,11 @@ package test_message
 import (
 	"bytes"
 	"fmt"
-	"github.com/fetchrobotics/rosgo/ros"
 	"rosgo_tests"
 	"std_msgs"
 	"testing"
+
+	"github.com/fetchrobotics/rosgo/ros"
 )
 
 func TestInitialize(t *testing.T) {

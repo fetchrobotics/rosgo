@@ -23,9 +23,8 @@ func getNamespace(name string) string {
 	result := name[:strings.LastIndex(name, Sep)+1]
 	if len(result) == 0 {
 		return Sep
-	} else {
-		return result
 	}
+	return result
 }
 
 func qualifyNodeName(nodeName string) (string, string, error) {

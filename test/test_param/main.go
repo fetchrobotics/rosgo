@@ -2,9 +2,10 @@ package main
 
 import (
 	"fmt"
-	"github.com/fetchrobotics/rosgo/ros"
 	"log"
 	"os"
+
+	"github.com/fetchrobotics/rosgo/ros"
 )
 
 func main() {

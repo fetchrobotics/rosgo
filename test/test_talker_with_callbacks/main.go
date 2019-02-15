@@ -3,10 +3,11 @@ package main
 //go:generate gengo msg std_msgs/String
 import (
 	"fmt"
-	"github.com/fetchrobotics/rosgo/ros"
 	"os"
 	"std_msgs"
 	"time"
+
+	"github.com/fetchrobotics/rosgo/ros"
 )
 
 func main() {

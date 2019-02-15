@@ -110,7 +110,6 @@ Bar[42] xfa
 	if err != nil {
 		t.Errorf("Failed to generate message: %v", err)
 	}
-	// fmt.Printf(action)
 }
 
 func TestGenerateMessage(t *testing.T) {
@@ -167,5 +166,4 @@ Bar[42] xfa
 	if err != nil {
 		t.Errorf("Failed to generate message: %v", err)
 	}
-	// fmt.Printf(msg)
 }

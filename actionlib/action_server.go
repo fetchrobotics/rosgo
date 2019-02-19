@@ -3,6 +3,7 @@ package actionlib
 import (
 	"actionlib_msgs"
 	"container/list"
+	"fmt"
 	"reflect"
 	"std_msgs"
 	"time"
@@ -30,10 +31,15 @@ type defaultActionServer struct {
 	pubQueueSize      int
 	subQueueSize      int
 	goalSub           ros.Subscriber
+	goalSubChan       chan ActionGoal
 	cancelSub         ros.Subscriber
+	cancelSubChan     chan *actionlib_msgs.GoalID
 	statusPub         ros.Publisher
+	statusPubChan     chan *actionlib_msgs.GoalStatusArray
 	resultPub         ros.Publisher
+	resultPubChan     chan ActionResult
 	feedbackPub       ros.Publisher
+	feedbackPubChan   chan ActionFeedback
 	goalChan          chan *ros.MessageType
 	shutdownChan      chan struct{}
 }
@@ -55,10 +61,17 @@ func newDefaultActionServer(node ros.Node, action string, actType ActionType, go
 	server.pubQueueSize = 50
 	server.subQueueSize = 0
 
+	server.goalSubChan = make(chan ActionGoal, 100)
+	server.cancelSubChan = make(chan *actionlib_msgs.GoalID, 100)
+	server.resultPubChan = make(chan ActionResult, 100)
+	server.feedbackPubChan = make(chan ActionFeedback, 100)
+	server.statusPubChan = make(chan *actionlib_msgs.GoalStatusArray, 100)
+
 	server.goalCallback = goalCb
 	server.cancelCallback = cancelCb
 
 	server.lastCancel = ros.Now()
+	server.statusList = list.New()
 	server.statusListTimeout = ros.NewDuration(60, 0)
 
 	server.shutdownChan = make(chan struct{}, 10)
@@ -66,23 +79,35 @@ func newDefaultActionServer(node ros.Node, action string, actType ActionType, go
 	return server
 }
 
-func (as *defaultActionServer) RegisterGoalCallback(goalCb interface{}) {
-	as.goalCallback = goalCb
-}
-
-func (as *defaultActionServer) RegisterCancelCallback(cancelCb interface{}) {
-	as.cancelCallback = cancelCb
-}
-
 func (as *defaultActionServer) Start() {
 	as.init()
-	as.started = true
-	as.publishStatus()
+	go as.publishStatusRoutine()
 	logger := as.node.Logger()
+	defer func() { logger.Debug("defaultActionServer.start exit") }()
 
-	defer func() {
-		logger.Debug("defaultActionServer.start exit")
-	}()
+	for {
+		logger.Debug("loop")
+		select {
+		case <-as.shutdownChan:
+			return
+
+		case goal := <-as.goalSubChan:
+			as.internalGoalCallback(goal)
+
+		case goalId := <-as.cancelSubChan:
+			as.internalCancelCallback(goalId)
+
+		case arr := <-as.statusPubChan:
+			logger.Debug("status publish signal recieved")
+			as.statusPub.Publish(arr)
+
+		case fb := <-as.feedbackPubChan:
+			as.feedbackPub.Publish(fb)
+
+		case res := <-as.resultPubChan:
+			as.resultPub.Publish(res)
+		}
+	}
 }
 
 // init intializes action publishers and subscribers
@@ -90,14 +115,22 @@ func (as *defaultActionServer) init() {
 	node := as.node
 
 	// queue sizes not implemented by ros.Node yet
-	subSize, _ := as.node.GetParam("actionlib_server_sub_queue_size")
-	as.subQueueSize = subSize.(int)
+	// subSize, _ := as.node.GetParam("actionlib_server_sub_queue_size")
+	// as.subQueueSize = subSize.(int)
 
-	pubSize, _ := node.GetParam("actionlib_server_pub_queue_size")
-	as.pubQueueSize = pubSize.(int)
+	// pubSize, _ := node.GetParam("actionlib_server_pub_queue_size")
+	// as.pubQueueSize = pubSize.(int)
 
-	as.goalSub = node.NewSubscriber(as.action+"/goal", as.actionType.GoalType(), as.internalGoalCallback)
-	as.cancelSub = node.NewSubscriber(as.action+"/cancel", actionlib_msgs.MsgGoalID, as.cancelCallback)
+	as.goalSub = node.NewSubscriber(as.action+"/goal", as.actionType.GoalType(),
+		func(goal ActionGoal) {
+			fmt.Printf("goal recieved: notifying channel")
+			as.goalSubChan <- goal
+		})
+	as.cancelSub = node.NewSubscriber(as.action+"/cancel", actionlib_msgs.MsgGoalID,
+		func(goalId *actionlib_msgs.GoalID) {
+			fmt.Printf("cancel recieved: notifying channel")
+			as.cancelSubChan <- goalId
+		})
 	as.resultPub = node.NewPublisher(as.action+"/result", as.actionType.ResultType())
 	as.statusPub = node.NewPublisher(as.action+"/status", actionlib_msgs.MsgGoalStatusArray)
 	as.feedbackPub = node.NewPublisher(as.action+"/feedback", as.actionType.FeedbackType())
@@ -112,8 +145,6 @@ func (as *defaultActionServer) init() {
 	// 		as.statusFrequency = Newros.Rate(newros.Rate.(float64))
 	// 	}
 	// }
-
-	as.statusTimer = time.NewTicker(time.Second / 5.0)
 }
 
 // publishResult publishes action result message
@@ -122,7 +153,7 @@ func (as *defaultActionServer) publishResult(status actionlib_msgs.GoalStatus, r
 	msg.SetHeader(std_msgs.Header{Stamp: ros.Now()})
 	msg.SetStatus(status)
 	msg.SetResult(result)
-	as.resultPub.Publish(msg)
+	as.resultPubChan <- msg
 }
 
 // publishFeedback publishes action feedback messages
@@ -131,16 +162,44 @@ func (as *defaultActionServer) publishFeedback(status actionlib_msgs.GoalStatus,
 	msg.SetHeader(std_msgs.Header{Stamp: ros.Now()})
 	msg.SetStatus(status)
 	msg.SetFeedback(feedback)
-	as.feedbackPub.Publish(msg)
+	as.feedbackPubChan <- msg
 }
 
 // publishStatus publishes action status messages
-func (as *defaultActionServer) publishStatus(status actionlib_msgs.GoalStatus) {
+func (as *defaultActionServer) publishStatus() {
+	var statArr []actionlib_msgs.GoalStatus
+	if as.node.OK() {
+		for e := as.statusList.Front(); e != nil; e = e.Next() {
+			st := e.Value.(*status)
+			destTime := st.destroyTime.Add(as.statusListTimeout)
+			if !st.destroyTime.IsZero() && destTime.Cmp(ros.Now()) <= 0 {
+				as.statusList.Remove(e)
+				continue
+			}
+
+			statArr = append(statArr, st.getGoalStatus())
+		}
+	}
+
+	arr := &actionlib_msgs.GoalStatusArray{}
+	arr.Header.Stamp = ros.Now()
+	arr.StatusList = statArr
+	as.statusPubChan <- arr
+}
+
+func (as *defaultActionServer) publishStatusRoutine() {
+	as.statusTimer = time.NewTicker(time.Second / 5.0)
+	for {
+		select {
+		case <-as.statusTimer.C:
+			as.publishStatus()
+		}
+	}
 
 }
 
 // internalCancelCallback recieves cancel message from client
-func (as *defaultActionServer) internalCancelCallback() {
+func (as *defaultActionServer) internalCancelCallback(goalId *actionlib_msgs.GoalID) {
 	logger := as.node.Logger()
 	logger.Debug("action server has received a new cancel request")
 }
@@ -149,10 +208,12 @@ func (as *defaultActionServer) internalCancelCallback() {
 // the goalID already exists in the status list. If not, it will call
 // server's goalCallback with goal that was recieved from the client.
 func (as *defaultActionServer) internalGoalCallback(goal ActionGoal) {
+	logger := as.node.Logger()
 	goalID := goal.GetGoalId()
+
 	for e := as.statusList.Front(); e != nil; e = e.Next() {
-		st := e.Value.(*Status)
-		if goalID.Id == st.goalID.Id {
+		st := e.Value.(*status)
+		if goalID.Id == st.goalStatus.GoalId.Id {
 			logger.Debugf("Goal %s was already in the status list with status %+v", goalID.Id, st.goalStatus)
 			if st.goalStatus.Status == actionlib_msgs.RECALLING {
 				st.goalStatus.Status = actionlib_msgs.RECALLED
@@ -165,12 +226,16 @@ func (as *defaultActionServer) internalGoalCallback(goal ActionGoal) {
 		}
 	}
 
-	st := NewStatus(goalID, as.statusListTimeout)
+	st := newStatusWithActionGoal(as, goal)
 	as.statusList.PushBack(st)
+	actGoal := goal.GetGoal()
 
-	goal := goal.GetGoal()
+	if !goalID.Stamp.IsZero() && goalID.Stamp.Cmp(as.lastCancel) <= 0 {
+		// set_cancelled
+		return
+	}
 
-	args := []reflect.Value{reflect.ValueOf(goal)}
+	args := []reflect.Value{reflect.ValueOf(actGoal)}
 	fun := reflect.ValueOf(as.goalCallback)
 	numArgsNeeded := fun.Type().NumIn()
 
@@ -179,35 +244,16 @@ func (as *defaultActionServer) internalGoalCallback(goal ActionGoal) {
 	}
 }
 
-func (as *defaultActionServer) internalStatusPublisher() {
-	for as.node.OK() {
-		var msg actionlib_msgs.GoalStatusArray
-		as.statusPub.Publish(&msg)
-		time.Sleep(time.Second)
-	}
+// RegisterGoalCallback replaces existing goal callback function with newly
+// provided goal callback function.
+func (as *defaultActionServer) RegisterGoalCallback(goalCb interface{}) {
+	as.goalCallback = goalCb
+}
+
+func (as *defaultActionServer) RegisterCancelCallback(cancelCb interface{}) {
+	as.cancelCallback = cancelCb
 }
 
 func (as *defaultActionServer) Shutdown() {
 	as.shutdownChan <- struct{}{}
-}
-
-type Status struct {
-	goalID      actionlib_msgs.GoalID
-	goalStatus  actionlib_msgs.GoalStatus
-	destroyTime ros.Time
-}
-
-func NewStatus(gID actionlib_msgs.GoalID, timeout ros.Duration) *Status {
-	dTime := ros.Now()
-	gStatus := actionlib_msgs.GoalStatus{
-		GoalId: gID,
-		Status: actionlib_msgs.PENDING,
-	}
-	st := &Status{
-		goalID:      gID,
-		goalStatus:  gStatus,
-		destroyTime: dTime.Add(timeout),
-	}
-
-	return st
 }

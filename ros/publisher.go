@@ -297,8 +297,8 @@ func (session *remoteSubscriberSession) start() {
 	if headerMap["type"] != session.typeName || headerMap["md5sum"] != session.md5sum {
 		panic(errors.New("Incomatible message type!"))
 	}
-	session.callerID = headerMap["callerID"]
-	ssp.subName = headerMap["callerID"]
+	session.callerID = headerMap["callerid"]
+	ssp.subName = headerMap["callerid"]
 	if session.connectCallback != nil {
 		go session.connectCallback(ssp)
 	}
@@ -306,7 +306,7 @@ func (session *remoteSubscriberSession) start() {
 	// 2. Return reponse header
 	var resHeaders []header
 	resHeaders = append(resHeaders, header{"message_definition", session.typeText})
-	resHeaders = append(resHeaders, header{"callerID", session.nodeID})
+	resHeaders = append(resHeaders, header{"callerid", session.nodeID})
 	resHeaders = append(resHeaders, header{"latching", "0"})
 	resHeaders = append(resHeaders, header{"md5sum", session.md5sum})
 	resHeaders = append(resHeaders, header{"topic", session.topic})

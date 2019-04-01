@@ -1,6 +1,5 @@
 package actionlib
 
-//go:generate gengo msg actionlib_msgs/GoalStatusArray
 import (
 	"github.com/fetchrobotics/rosgo/ros"
 )
@@ -19,6 +18,15 @@ func NewActionServer(
 	return newDefaultActionServer(node, action, actionType, goalCb, cancelCb, autoStart)
 }
 
+func NewSimpleActionServer(
+	node ros.Node,
+	action string,
+	actionType ActionType,
+	executeCb interface{},
+	autoStart bool) SimpleActionServer {
+	return newSimpleActionServer(node, action, actionType, executeCb, autoStart)
+}
+
 type ActionServer interface {
 	Start()
 	Shutdown()
@@ -32,4 +40,23 @@ type ActionClient interface {
 	WaitForResult()
 	GetResult() ros.Message
 	Shutdown()
+}
+
+type SimpleActionServer interface {
+	Start()
+
+	IsNewGoalAvailable() bool
+	IsPreemptRequested() bool
+	IsActive() bool
+
+	SetSucceeded(ActionResult, string) error
+	SetAborted(ActionResult, string) error
+	SetPreempted(ActionResult, string) error
+
+	AcceptNewGoal() (ActionGoal, error)
+	PublishFeedback(ActionFeedback) error
+	GetDefaultResult() ActionResult
+
+	RegisterGoalCallback(interface{})
+	RegisterPreemptCallback(interface{})
 }

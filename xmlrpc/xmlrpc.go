@@ -31,7 +31,7 @@ func emitValue(buf *bytes.Buffer, value interface{}) error {
 	} else {
 		val := reflect.ValueOf(value)
 		if !val.IsValid() {
-			return fmt.Errorf("Invalid kind! zero value recieved")
+			return nil
 		}
 
 		t := val.Type()

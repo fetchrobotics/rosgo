@@ -3,7 +3,6 @@ package actionlib
 import (
 	"actionlib_msgs"
 	"container/list"
-	"fmt"
 	"reflect"
 	"std_msgs"
 	"time"
@@ -62,9 +61,9 @@ func newDefaultActionServer(node ros.Node, action string, actType ActionType, go
 	server.subQueueSize = 0
 
 	server.goalSubChan = make(chan ActionGoal, 100)
-	server.cancelSubChan = make(chan *actionlib_msgs.GoalID, 100)
 	server.resultPubChan = make(chan ActionResult, 100)
 	server.feedbackPubChan = make(chan ActionFeedback, 100)
+	server.cancelSubChan = make(chan *actionlib_msgs.GoalID, 100)
 	server.statusPubChan = make(chan *actionlib_msgs.GoalStatusArray, 100)
 
 	server.goalCallback = goalCb
@@ -98,7 +97,6 @@ func (as *defaultActionServer) Start() {
 			as.internalCancelCallback(goalId)
 
 		case arr := <-as.statusPubChan:
-			logger.Debug("status publish signal recieved")
 			as.statusPub.Publish(arr)
 
 		case fb := <-as.feedbackPubChan:
@@ -123,12 +121,10 @@ func (as *defaultActionServer) init() {
 
 	as.goalSub = node.NewSubscriber(as.action+"/goal", as.actionType.GoalType(),
 		func(goal ActionGoal) {
-			fmt.Printf("goal recieved: notifying channel")
 			as.goalSubChan <- goal
 		})
 	as.cancelSub = node.NewSubscriber(as.action+"/cancel", actionlib_msgs.MsgGoalID,
 		func(goalId *actionlib_msgs.GoalID) {
-			fmt.Printf("cancel recieved: notifying channel")
 			as.cancelSubChan <- goalId
 		})
 	as.resultPub = node.NewPublisher(as.action+"/result", as.actionType.ResultType())
@@ -195,7 +191,6 @@ func (as *defaultActionServer) publishStatusRoutine() {
 			as.publishStatus()
 		}
 	}
-
 }
 
 // internalCancelCallback recieves cancel message from client
@@ -218,7 +213,7 @@ func (as *defaultActionServer) internalGoalCallback(goal ActionGoal) {
 			if st.goalStatus.Status == actionlib_msgs.RECALLING {
 				st.goalStatus.Status = actionlib_msgs.RECALLED
 				result := as.actionResultType.NewMessage()
-				as.publishResult(st.goalStatus, result)
+				as.publishResult(*st.goalStatus, result)
 			}
 
 			st.destroyTime = ros.Now()
@@ -228,14 +223,13 @@ func (as *defaultActionServer) internalGoalCallback(goal ActionGoal) {
 
 	st := newStatusWithActionGoal(as, goal)
 	as.statusList.PushBack(st)
-	actGoal := goal.GetGoal()
 
 	if !goalID.Stamp.IsZero() && goalID.Stamp.Cmp(as.lastCancel) <= 0 {
 		// set_cancelled
 		return
 	}
 
-	args := []reflect.Value{reflect.ValueOf(actGoal)}
+	args := []reflect.Value{reflect.ValueOf(goal)}
 	fun := reflect.ValueOf(as.goalCallback)
 	numArgsNeeded := fun.Type().NumIn()
 

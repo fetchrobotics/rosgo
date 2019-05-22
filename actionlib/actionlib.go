@@ -14,7 +14,8 @@ func NewActionServer(
 	actionType ActionType,
 	goalCb interface{},
 	cancelCb interface{},
-	autoStart bool) ActionServer {
+	autoStart bool,
+) ActionServer {
 	return newDefaultActionServer(node, action, actionType, goalCb, cancelCb, autoStart)
 }
 
@@ -23,7 +24,8 @@ func NewSimpleActionServer(
 	action string,
 	actionType ActionType,
 	executeCb interface{},
-	autoStart bool) SimpleActionServer {
+	autoStart bool,
+) SimpleActionServer {
 	return newSimpleActionServer(node, action, actionType, executeCb, autoStart)
 }
 
@@ -54,9 +56,9 @@ type SimpleActionServer interface {
 	SetPreempted(ActionResult, string) error
 
 	AcceptNewGoal() (ActionGoal, error)
-	PublishFeedback(ActionFeedback) error
+	PublishFeedback(ActionFeedback)
 	GetDefaultResult() ActionResult
 
-	RegisterGoalCallback(interface{})
+	RegisterGoalCallback(interface{}) error
 	RegisterPreemptCallback(interface{})
 }

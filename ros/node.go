@@ -61,19 +61,18 @@ type defaultNode struct {
 	subscribers    map[string]*defaultSubscriber
 	publishers     sync.Map
 	servers        map[string]*defaultServiceServer
-	// actions        map[string]*defaultActionServer
-	jobChan       chan func()
-	interruptChan chan os.Signal
-	logger        Logger
-	ok            bool
-	okMutex       sync.RWMutex
-	waitGroup     sync.WaitGroup
-	logDir        string
-	hostname      string
-	listenIP      string
-	homeDir       string
-	nameResolver  *NameResolver
-	nonRosArgs    []string
+	jobChan        chan func()
+	interruptChan  chan os.Signal
+	logger         Logger
+	ok             bool
+	okMutex        sync.RWMutex
+	waitGroup      sync.WaitGroup
+	logDir         string
+	hostname       string
+	listenIP       string
+	homeDir        string
+	nameResolver   *NameResolver
+	nonRosArgs     []string
 }
 
 func newDefaultNode(name string, args []string) (*defaultNode, error) {

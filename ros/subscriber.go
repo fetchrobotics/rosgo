@@ -16,13 +16,6 @@ type messageEvent struct {
 	event MessageEvent
 }
 
-type connectionStats struct {
-	id            int
-	bytesReceived uint32
-	dropEstimate  int
-	quitChan      chan struct{}
-}
-
 // The subscription object runs in own goroutine (startSubscription).
 // Do not access any properties from other goroutine.
 type defaultSubscriber struct {
@@ -34,8 +27,7 @@ type defaultSubscriber struct {
 	callbacks        []interface{}
 	addCallbackChan  chan interface{}
 	shutdownChan     chan struct{}
-	connections      map[string]*connectionStats
-	connIDCount      int
+	connections      map[string]chan struct{}
 	disconnectedChan chan string
 }
 
@@ -48,36 +40,33 @@ func newDefaultSubscriber(topic string, msgType MessageType, callback interface{
 	sub.addCallbackChan = make(chan interface{}, 10)
 	sub.shutdownChan = make(chan struct{}, 10)
 	sub.disconnectedChan = make(chan string, 10)
-	sub.connections = make(map[string]*connectionStats)
-	sub.connIDCount = 0
+	sub.connections = make(map[string]chan struct{})
 	sub.callbacks = []interface{}{callback}
 	return sub
 }
 
-func (sub *defaultSubscriber) start(wg *sync.WaitGroup, nodeID string, nodeApiUri string, masterURI string, jobChan chan func(), logger Logger) {
+func (sub *defaultSubscriber) start(wg *sync.WaitGroup, nodeID string, nodeURI string, masterURI string, jobChan chan func(), logger Logger) {
 	logger.Debugf("Subscriber goroutine for %s started.", sub.topic)
 	wg.Add(1)
 	defer wg.Done()
 	defer func() {
 		logger.Debug("defaultSubscriber.start exit")
 	}()
-
 	for {
 		logger.Debug("Loop")
 		select {
 		case list := <-sub.pubListChan:
-			logger.Debugf("Receive pubListChan: %+v", list)
+			logger.Debug("Receive pubListChan")
 			deadPubs := setDifference(sub.pubList, list)
 			newPubs := setDifference(list, sub.pubList)
 			sub.pubList = list
 
 			for _, pub := range deadPubs {
-				quitChan := sub.connections[pub].quitChan
+				quitChan := sub.connections[pub]
 				quitChan <- struct{}{}
-				if _, ok := sub.connections[pub]; ok {
-					delete(sub.connections, pub)
-				}
+				delete(sub.connections, pub)
 			}
+
 			for _, pub := range newPubs {
 				protocols := []interface{}{[]interface{}{"TCPROS"}}
 				result, err := callRosAPI(pub, "requestTopic", nodeID, sub.topic, protocols)
@@ -85,39 +74,37 @@ func (sub *defaultSubscriber) start(wg *sync.WaitGroup, nodeID string, nodeApiUr
 					logger.Fatal(err)
 					continue
 				}
+
 				protocolParams := result.([]interface{})
 				for _, x := range protocolParams {
 					logger.Debug(x)
 				}
+
 				name := protocolParams[0].(string)
 				if name == "TCPROS" {
 					addr := protocolParams[1].(string)
 					port := protocolParams[2].(int32)
 					uri := fmt.Sprintf("%s:%d", addr, port)
-
-					sub.connections[pub] = new(connectionStats)
-					sub.connections[pub].id = sub.connIDCount
-					sub.connections[pub].bytesReceived = 0
-					sub.connections[pub].dropEstimate = -1
-					sub.connections[pub].quitChan = make(chan struct{}, 10)
-					sub.connIDCount++
-
+					quitChan := make(chan struct{}, 10)
+					sub.connections[pub] = quitChan
 					go startRemotePublisherConn(logger,
 						uri, sub.topic,
 						sub.msgType.MD5Sum(),
 						sub.msgType.Name(), nodeID,
 						sub.msgChan,
-						sub.connections[pub],
+						quitChan,
 						sub.disconnectedChan)
 				} else {
 					logger.Warnf("rosgo Not support protocol '%s'", name)
 				}
 			}
+
 		case callback := <-sub.addCallbackChan:
 			logger.Debug("Receive addCallbackChan")
 			sub.callbacks = append(sub.callbacks, callback)
+
 		case msgEvent := <-sub.msgChan:
-			// Pop received message then bind callbacks and enqueue to the job channel.
+			// Pop received message then bind callbacks and enqueue to the job channle.
 			logger.Debug("Receive msgChan")
 			callbacks := make([]interface{}, len(sub.callbacks))
 			copy(callbacks, sub.callbacks)
@@ -137,18 +124,19 @@ func (sub *defaultSubscriber) start(wg *sync.WaitGroup, nodeID string, nodeApiUr
 				}
 			}
 			logger.Debug("Callback job enqueued.")
+
 		case pubURI := <-sub.disconnectedChan:
 			logger.Debugf("Connection to %s was disconnected.", pubURI)
 			delete(sub.connections, pubURI)
+
 		case <-sub.shutdownChan:
 			// Shutdown subscription goroutine
 			logger.Debug("Receive shutdownChan")
-			for _, connStat := range sub.connections {
-				closeChan := connStat.quitChan
+			for _, closeChan := range sub.connections {
 				closeChan <- struct{}{}
 				close(closeChan)
 			}
-			_, err := callRosAPI(masterURI, "unregisterSubscriber", nodeID, sub.topic, nodeApiUri)
+			_, err := callRosAPI(masterURI, "unregisterSubscriber", nodeID, sub.topic, nodeURI)
 			if err != nil {
 				logger.Warn(err)
 			}
@@ -161,7 +149,7 @@ func startRemotePublisherConn(logger Logger,
 	pubURI string, topic string, md5sum string,
 	msgType string, nodeID string,
 	msgChan chan messageEvent,
-	connStat *connectionStats,
+	quitChan chan struct{},
 	disconnectedChan chan string) {
 	logger.Debug("startRemotePublisherConn()")
 
@@ -218,7 +206,7 @@ func startRemotePublisherConn(logger Logger,
 	var buffer []byte
 	for {
 		select {
-		case <-connStat.quitChan:
+		case <-quitChan:
 			return
 		default:
 			conn.SetDeadline(time.Now().Add(1000 * time.Millisecond))
@@ -226,12 +214,17 @@ func startRemotePublisherConn(logger Logger,
 				//logger.Debug("Reading message size...")
 				err := binary.Read(conn, binary.LittleEndian, &msgSize)
 				if err != nil {
+					if err == io.EOF {
+						logger.Infof("Publisher %s on topic %s disconnected", pubURI, topic)
+						disconnectedChan <- pubURI
+						return
+					}
 					if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
 						// Timed out
 						//logger.Debug(neterr)
 						continue
 					} else {
-						logger.Error("Failed to read a message size")
+						logger.Error("Failed to read a message size", err)
 						disconnectedChan <- pubURI
 						return
 					}
@@ -243,52 +236,27 @@ func startRemotePublisherConn(logger Logger,
 				//logger.Debug("Reading message body...")
 				_, err = io.ReadFull(conn, buffer)
 				if err != nil {
+					if err == io.EOF {
+						logger.Info("Publisher disconnected")
+						disconnectedChan <- pubURI
+						return
+					}
 					if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
 						// Timed out
 						//logger.Debug(neterr)
 						continue
 					} else {
-						logger.Error("Failed to read a message body")
+						logger.Error("Failed to read a message body", err)
 						disconnectedChan <- pubURI
+						return
 					}
 				}
 				event.ReceiptTime = time.Now()
 				msgChan <- messageEvent{bytes: buffer, event: event}
-				connStat.bytesReceived += msgSize
 				readingSize = true
 			}
 		}
 	}
-}
-
-func (sub *defaultSubscriber) getSubscriberStats() []interface{} {
-	subStats := []interface{}{}
-	for _, connStat := range sub.connections {
-		stat := []interface{}{
-			connStat.id,
-			connStat.bytesReceived,
-			-1,
-			true,
-		}
-		subStats = append(subStats, stat)
-	}
-	return subStats
-}
-
-func (sub *defaultSubscriber) getSubscriberInfo() []interface{} {
-	subInfo := []interface{}{}
-	for destURI, connStat := range sub.connections {
-		connInfo := []interface{}{
-			connStat.id,
-			destURI,
-			"i",
-			"TCPROS",
-			sub.topic,
-			true,
-		}
-		subInfo = append(subInfo, connInfo)
-	}
-	return subInfo
 }
 
 func (sub *defaultSubscriber) Shutdown() {

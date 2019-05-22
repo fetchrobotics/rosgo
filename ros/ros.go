@@ -4,22 +4,25 @@ import (
 	"time"
 )
 
+// Node defines interface for a ros node
 type Node interface {
+
+	// NewPublisher creates a publisher for specified topic and message type.
 	NewPublisher(topic string, msgType MessageType) Publisher
-	// Create a publisher which gives you callbacks when subscribers
+
+	// NewPublisherWithCallbacks creates a publisher which gives you callbacks when subscribers
 	// connect and disconnect.  The callbacks are called in their own
 	// goroutines, so they don't need to return immediately to let the
 	// connection proceed.
-	NewPublisherWithCallbacks(topic string,
-		msgType MessageType,
-		connectCallback, disconnectCallback func(SingleSubscriberPublisher)) Publisher
-	// callback should be a function which takes 0, 1, or 2 arguments.
-	// If it takes 0 arguments, it will simply be called without the
-	// message.  1-argument functions are the normal case, and the
-	// argument should be of the generated message type.  If the
-	// function takes 2 arguments, the first argument should be of the
-	// generated message type and the second argument should be of
-	// type MessageEvent.
+	NewPublisherWithCallbacks(topic string, msgType MessageType, connectCallback, disconnectCallback func(SingleSubscriberPublisher)) Publisher
+
+	// NewSubscriber creates a subscriber to specified topic, where
+	// the messages are of a given type. callback should be a function
+	// which takes 0, 1, or 2 arguments.If it takes 0 arguments, it will
+	// simply be called without the message.  1-argument functions are
+	// the normal case, and the argument should be of the generated message type.
+	// If the function takes 2 arguments, the first argument should be of the
+	// generated message type and the second argument should be of type MessageEvent.
 	NewSubscriber(topic string, msgType MessageType, callback interface{}) Subscriber
 	NewServiceClient(service string, srvType ServiceType) ServiceClient
 	NewServiceServer(service string, srvType ServiceType, callback interface{}) ServiceServer
@@ -38,6 +41,7 @@ type Node interface {
 	Logger() Logger
 
 	NonRosArgs() []string
+	Name() string
 }
 
 func NewNode(name string, args []string) (Node, error) {
@@ -46,6 +50,7 @@ func NewNode(name string, args []string) (Node, error) {
 
 type Publisher interface {
 	Publish(msg Message)
+	GetNumSubscribers() int
 	Shutdown()
 }
 

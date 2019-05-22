@@ -11,8 +11,8 @@ import (
 	"github.com/fetchrobotics/rosgo/ros"
 )
 
-func goalCallback(msg *actionlib_tutorials.FibonacciGoal) {
-	fmt.Printf("Goal Recieved: %s !!!", msg)
+func goalCallback(msg *actionlib_tutorials.FibonacciActionGoal) {
+	fmt.Printf("Goal Recieved: %v !!!", msg)
 }
 
 func cancelCallback(msg *actionlib_msgs.GoalID) {

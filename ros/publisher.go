@@ -2,7 +2,6 @@ package ros
 
 import (
 	"bytes"
-	"container/list"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -18,7 +17,8 @@ type remoteSubscriberSessionError struct {
 }
 
 func (e *remoteSubscriberSessionError) Error() string {
-	return fmt.Sprintf("remoteSubscriberSession %v error: %v", e.session, e.err)
+	return fmt.Sprintf("remoteSubscriberSession: %s topic: %s error: %v",
+		e.session.callerID, e.session.topic, e.err)
 }
 
 type defaultPublisher struct {
@@ -27,7 +27,8 @@ type defaultPublisher struct {
 	msgType            MessageType
 	msgChan            chan []byte
 	shutdownChan       chan struct{}
-	sessions           *list.List
+	sesssionIDCount    int
+	sessions           map[int]*remoteSubscriberSession
 	sessionChan        chan *remoteSubscriberSession
 	sessionErrorChan   chan error
 	listenerErrorChan  chan error
@@ -44,12 +45,11 @@ func newDefaultPublisher(node *defaultNode,
 	pub.topic = topic
 	pub.msgType = msgType
 	pub.shutdownChan = make(chan struct{}, 10)
+	pub.sessions = make(map[int]*remoteSubscriberSession)
 	pub.msgChan = make(chan []byte, 10)
 	pub.listenerErrorChan = make(chan error, 10)
 	pub.sessionChan = make(chan *remoteSubscriberSession, 10)
 	pub.sessionErrorChan = make(chan error, 10)
-	pub.sessions = list.New()
-	pub.sesssionIDCount = 0
 	pub.connectCallback = connectCallback
 	pub.disconnectCallback = disconnectCallback
 	if listener, err := net.Listen("tcp", ":0"); err != nil {
@@ -76,27 +76,27 @@ func (pub *defaultPublisher) start(wg *sync.WaitGroup) {
 		select {
 		case msg := <-pub.msgChan:
 			logger.Debug("Receive msgChan")
-			for e := pub.sessions.Front(); e != nil; e = e.Next() {
-				session := e.Value.(*remoteSubscriberSession)
+			for _, s := range pub.sessions {
+				session := s
 				session.msgChan <- msg
 			}
+
 		case err := <-pub.listenerErrorChan:
 			logger.Debug("Listener closed unexpectedly: %s", err)
 			pub.listener.Close()
 			return
+
 		case s := <-pub.sessionChan:
-			pub.sessions.PushBack(s)
+			pub.sessions[s.id] = s
 			go s.start()
+
 		case err := <-pub.sessionErrorChan:
 			logger.Error(err)
 			if sessionError, ok := err.(*remoteSubscriberSessionError); ok {
-				for e := pub.sessions.Front(); e != nil; e = e.Next() {
-					if e.Value == sessionError.session {
-						pub.sessions.Remove(e)
-						break
-					}
-				}
+				id := sessionError.session.id
+				delete(pub.sessions, id)
 			}
+
 		case <-pub.shutdownChan:
 			logger.Debug("defaultPublisher.start Receive shutdownChan")
 			pub.listener.Close()
@@ -105,11 +105,11 @@ func (pub *defaultPublisher) start(wg *sync.WaitGroup) {
 			if err != nil {
 				logger.Warn(err)
 			}
-			for e := pub.sessions.Front(); e != nil; e = e.Next() {
-				session := e.Value.(*remoteSubscriberSession)
-				session.quitChan <- struct{}{}
+
+			for id, s := range pub.sessions {
+				s.quitChan <- struct{}{}
+				delete(pub.sessions, id)
 			}
-			pub.sessions.Init() // Clear all sessions
 			return
 		}
 	}
@@ -134,7 +134,9 @@ func (pub *defaultPublisher) listenRemoteSubscriber() {
 		}
 
 		logger.Debugf("Connected %s", conn.RemoteAddr().String())
-		session := newRemoteSubscriberSession(pub, conn)
+		id := pub.sesssionIDCount
+		pub.sesssionIDCount++
+		session := newRemoteSubscriberSession(pub, id, conn)
 		pub.sessionChan <- session
 	}
 }
@@ -143,6 +145,10 @@ func (pub *defaultPublisher) Publish(msg Message) {
 	var buf bytes.Buffer
 	_ = msg.Serialize(&buf)
 	pub.msgChan <- buf.Bytes()
+}
+
+func (pub *defaultPublisher) GetNumSubscribers() int {
+	return len(pub.sessions)
 }
 
 func (pub *defaultPublisher) Shutdown() {
@@ -156,40 +162,6 @@ func (pub *defaultPublisher) hostAndPort() (string, string) {
 		panic(err)
 	}
 	return pub.node.hostname, port
-}
-
-func (pub *defaultPublisher) getPublisherStats() (uint32, []interface{}) {
-	var msgDataSent uint32
-	pubStats := []interface{}{}
-	for e := pub.sessions.Front(); e != nil; e = e.Next() {
-		session := e.Value.(*remoteSubscriberSession)
-		stat := []interface{}{
-			session.id,
-			session.sizeBytesSent + session.msgBytesSent,
-			session.numSent,
-			true,
-		}
-		msgDataSent += session.msgBytesSent
-		pubStats = append(pubStats, stat)
-	}
-	return msgDataSent, pubStats
-}
-
-func (pub *defaultPublisher) getPublisherInfo() []interface{} {
-	pubInfo := []interface{}{}
-	for e := pub.sessions.Front(); e != nil; e = e.Next() {
-		session := e.Value.(*remoteSubscriberSession)
-		stat := []interface{}{
-			session.id,
-			session.callerID,
-			"o",
-			"TCPROS",
-			session.topic,
-			true,
-		}
-		pubInfo = append(pubInfo, stat)
-	}
-	return pubInfo
 }
 
 type remoteSubscriberSession struct {
@@ -286,7 +258,7 @@ func (session *remoteSubscriberSession) start() {
 	// 1. Read connection header
 	headers, err := readConnectionHeader(session.conn)
 	if err != nil {
-		panic(errors.New("Failed to read connection header."))
+		panic(errors.New("failed to read connection header"))
 	}
 	logger.Debug("TCPROS Connection Header:")
 	headerMap := make(map[string]string)
@@ -324,7 +296,7 @@ func (session *remoteSubscriberSession) start() {
 	}
 	err = writeConnectionHeader(resHeaders, session.conn)
 	if err != nil {
-		panic(errors.New("Failed to write response header."))
+		panic(errors.New("failed to write response header"))
 	}
 
 	// 3. Start sending message

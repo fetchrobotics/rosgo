@@ -4,37 +4,30 @@ import (
 	"actionlib_msgs"
 	"fmt"
 	"hash/fnv"
-	"strings"
 
 	"github.com/fetchrobotics/rosgo/ros"
 )
 
 type status struct {
-	actionServer *defaultActionServer
-	goal         ActionGoal
-	goalStatus   *actionlib_msgs.GoalStatus
-	destroyTime  ros.Time
+	as          *defaultActionServer
+	goal        ActionGoal
+	goalStatus  *actionlib_msgs.GoalStatus
+	destroyTime ros.Time
 }
 
 func newStatusWithActionGoal(as *defaultActionServer, goal ActionGoal) *status {
 	st := new(status)
-	st.actionServer = as
+	st.as = as
 	st.goal = goal
-
 	timeNow := ros.Now()
 	st.destroyTime = timeNow.Add(as.statusListTimeout)
-
 	st.goalStatus = &actionlib_msgs.GoalStatus{}
 	st.goalStatus.GoalId = goal.GetGoalId()
 	st.goalStatus.Status = actionlib_msgs.PENDING
 
 	if st.goalStatus.GoalId.Id == "" {
-		var strs []string
-		strs = append(strs, "nodeName"+"-")
-		strs = append(strs, string(as.statusList.Len())+"-")
-		strs = append(strs, string(timeNow.Sec)+"."+string(timeNow.NSec))
-
-		st.goalStatus.GoalId.Id = strings.Join(strs, "")
+		st.goalStatus.GoalId.Id = fmt.Sprintf("nodeName-%d-%d-%d",
+			len(as.statusList), timeNow.Sec, timeNow.NSec)
 		st.goalStatus.GoalId.Stamp = timeNow
 	}
 
@@ -47,7 +40,7 @@ func newStatusWithActionGoal(as *defaultActionServer, goal ActionGoal) *status {
 
 func newStatusWithGoalStatus(as *defaultActionServer, goalStatus actionlib_msgs.GoalStatus) *status {
 	st := new(status)
-	st.actionServer = as
+	st.as = as
 	st.goalStatus = &goalStatus
 	timeNow := ros.Now()
 	st.destroyTime = timeNow.Add(as.statusListTimeout)
@@ -64,11 +57,11 @@ func (st *status) setAccepted(text string) error {
 	if status == actionlib_msgs.PENDING {
 		st.goalStatus.Status = actionlib_msgs.ACTIVE
 		st.goalStatus.Text = text
-		st.actionServer.publishStatus()
+		st.as.publishStatus()
 	} else if status == actionlib_msgs.RECALLING {
 		st.goalStatus.Status = actionlib_msgs.PREEMPTING
 		st.goalStatus.Text = text
-		st.actionServer.publishStatus()
+		st.as.publishStatus()
 	} else {
 		return fmt.Errorf("to transition to an active state, the goal must be in a pending"+
 			"or recalling state, it is currently in state: %d", st.goalStatus.Status)
@@ -88,12 +81,12 @@ func (st *status) setCancelled(result ActionResult, text string) error {
 		st.goalStatus.Status = actionlib_msgs.RECALLED
 		st.goalStatus.Text = text
 		st.destroyTime = ros.Now()
-		st.actionServer.publishStatus()
+		st.as.publishResult(st.getGoalStatus(), result.GetResult())
 	} else if status == actionlib_msgs.ACTIVE || status == actionlib_msgs.PREEMPTING {
 		st.goalStatus.Status = actionlib_msgs.PREEMPTED
 		st.goalStatus.Text = text
 		st.destroyTime = ros.Now()
-		st.actionServer.publishStatus()
+		st.as.publishResult(st.getGoalStatus(), result.GetResult())
 	} else {
 		return fmt.Errorf("to transition to an active state, the goal must be in a pending"+
 			"recalling, active or prempting state, it is currently in state: %d", st.goalStatus.Status)
@@ -113,7 +106,7 @@ func (st *status) setRejected(result ActionResult, text string) error {
 		st.goalStatus.Status = actionlib_msgs.REJECTED
 		st.goalStatus.Text = text
 		st.destroyTime = ros.Now()
-		st.actionServer.publishStatus()
+		st.as.publishResult(st.getGoalStatus(), result.GetResult())
 	} else {
 		return fmt.Errorf("to transition to an active state, the goal must be in a pending"+
 			"or recalling state, it is currently in state: %d", st.goalStatus.Status)
@@ -133,7 +126,7 @@ func (st *status) setAborted(result ActionResult, text string) error {
 		st.goalStatus.Status = actionlib_msgs.ABORTED
 		st.goalStatus.Text = text
 		st.destroyTime = ros.Now()
-		st.actionServer.publishStatus()
+		st.as.publishResult(st.getGoalStatus(), result.GetResult())
 	} else {
 		return fmt.Errorf("to transition to an active state, the goal must be in a prempting"+
 			"or active state, it is currently in state: %d", st.goalStatus.Status)
@@ -153,7 +146,7 @@ func (st *status) setSucceeded(result ActionResult, text string) error {
 		st.goalStatus.Status = actionlib_msgs.SUCCEEDED
 		st.goalStatus.Text = text
 		st.destroyTime = ros.Now()
-		st.actionServer.publishResult(st.getGoalStatus(), result.GetResult())
+		st.as.publishResult(st.getGoalStatus(), result.GetResult())
 	} else {
 		return fmt.Errorf("to transition to an active state, the goal must be in a prempting"+
 			"or active state, it is currently in state: %d", st.goalStatus.Status)
@@ -164,29 +157,27 @@ func (st *status) setSucceeded(result ActionResult, text string) error {
 
 func (st *status) setCancelRequested() bool {
 	if st.goal == nil {
-		fmt.Errorf("attempt to set status on an uninitialized status handler")
 		return false
 	}
 
 	status := st.goalStatus.Status
-
 	if status == actionlib_msgs.PENDING {
 		st.goalStatus.Status = actionlib_msgs.RECALLING
 		st.destroyTime = ros.Now()
-		st.actionServer.publishStatus()
+		st.as.publishStatus()
 	}
 
 	if status == actionlib_msgs.ACTIVE {
 		st.goalStatus.Status = actionlib_msgs.PREEMPTING
 		st.destroyTime = ros.Now()
-		st.actionServer.publishStatus()
+		st.as.publishStatus()
 	}
 
 	return true
 }
 
 func (st *status) publishFeedback(feedback ActionFeedback) {
-	st.actionServer.publishFeedback(st.getGoalStatus(), feedback.GetFeedback())
+	st.as.publishFeedback(st.getGoalStatus(), feedback.GetFeedback())
 }
 
 func (st *status) getGoal() ActionGoal {

@@ -18,7 +18,8 @@ type remoteSubscriberSessionError struct {
 }
 
 func (e *remoteSubscriberSessionError) Error() string {
-	return fmt.Sprintf("remoteSubscriberSession %v error: %v", e.session, e.err)
+	return fmt.Sprintf("remoteSubscriberSession: %s topic: %s error: %v",
+		e.session.callerID, e.session.topic, e.err)
 }
 
 type defaultPublisher struct {
@@ -28,6 +29,7 @@ type defaultPublisher struct {
 	msgChan            chan []byte
 	shutdownChan       chan struct{}
 	sessions           *list.List
+	sesssionIDCount    int
 	sessionChan        chan *remoteSubscriberSession
 	sessionErrorChan   chan error
 	listenerErrorChan  chan error
@@ -134,7 +136,9 @@ func (pub *defaultPublisher) listenRemoteSubscriber() {
 		}
 
 		logger.Debugf("Connected %s", conn.RemoteAddr().String())
-		session := newRemoteSubscriberSession(pub, conn)
+		id := pub.sesssionIDCount
+		pub.sesssionIDCount++
+		session := newRemoteSubscriberSession(pub, id, conn)
 		pub.sessionChan <- session
 	}
 }
@@ -286,7 +290,7 @@ func (session *remoteSubscriberSession) start() {
 	// 1. Read connection header
 	headers, err := readConnectionHeader(session.conn)
 	if err != nil {
-		panic(errors.New("Failed to read connection header."))
+		panic(errors.New("failed to read connection header"))
 	}
 	logger.Debug("TCPROS Connection Header:")
 	headerMap := make(map[string]string)
@@ -295,7 +299,7 @@ func (session *remoteSubscriberSession) start() {
 		logger.Debugf("  `%s` = `%s`", h.key, h.value)
 	}
 	if headerMap["type"] != session.typeName || headerMap["md5sum"] != session.md5sum {
-		panic(errors.New("Incomatible message type!"))
+		panic(errors.New("incomatible message type"))
 	}
 	session.callerID = headerMap["callerid"]
 	ssp.subName = headerMap["callerid"]
@@ -317,7 +321,7 @@ func (session *remoteSubscriberSession) start() {
 	}
 	err = writeConnectionHeader(resHeaders, session.conn)
 	if err != nil {
-		panic(errors.New("Failed to write response header."))
+		panic(errors.New("failed to write response header"))
 	}
 
 	// 3. Start sending message

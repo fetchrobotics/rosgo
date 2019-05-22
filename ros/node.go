@@ -214,13 +214,6 @@ func (node *defaultNode) OK() bool {
 
 func (node *defaultNode) getBusStats(callerID string) (interface{}, error) {
 	publishStats := []interface{}{}
-	for t, p := range node.publishers {
-		var msgDataSent uint32
-		var ps []interface{}
-		msgDataSent, ps = p.getPublisherStats()
-		pubConnectionData := []interface{}{t, msgDataSent, ps}
-		publishStats = append(publishStats, pubConnectionData)
-	}
 
 	subscribeStats := []interface{}{}
 	for t, s := range node.subscribers {
@@ -236,9 +229,6 @@ func (node *defaultNode) getBusStats(callerID string) (interface{}, error) {
 
 func (node *defaultNode) getBusInfo(callerID string) (interface{}, error) {
 	publishInfo := []interface{}{}
-	for _, p := range node.publishers {
-		publishInfo = append(publishInfo, p.getPublisherInfo()...)
-	}
 
 	subscribeInfo := []interface{}{}
 	for _, s := range node.subscribers {
@@ -290,7 +280,7 @@ func (node *defaultNode) getPublications(callerID string) (interface{}, error) {
 		return true
 	})
 
-	return buildRosApiResult(0, "Success", result), nil
+	return buildRosAPIResult(0, "Success", result), nil
 }
 
 func (node *defaultNode) paramUpdate(callerID string, key string, value interface{}) (interface{}, error) {

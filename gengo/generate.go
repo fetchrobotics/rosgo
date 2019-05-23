@@ -146,6 +146,7 @@ func (m *{{ .ShortName }}) Deserialize(buf *bytes.Reader) error {
     var err error = nil
 {{- range .Fields }}
 {{-    if .IsArray }}
+    {
         var size uint32
         if err = binary.Read(buf, binary.LittleEndian, &size); err != nil {
             return err
@@ -156,6 +157,7 @@ func (m *{{ .ShortName }}) Deserialize(buf *bytes.Reader) error {
         for i := 0; i < int(size); i++ {
 {{-          if .IsBuiltin }}
 {{-              if eq .Type "string" }}
+            {
                 var size uint32
                 if err = binary.Read(buf, binary.LittleEndian, &size); err != nil {
                     return err
@@ -165,15 +167,17 @@ func (m *{{ .ShortName }}) Deserialize(buf *bytes.Reader) error {
                     return err
                 }
                 m.{{ .GoName }}[i] = string(data)
+            }
 {{-              else }}
 {{- 					if or (eq .Type "time") (eq .Type "duration") }}
+            {
                 if err = binary.Read(buf, binary.LittleEndian, &m.{{ .GoName }}[i].Sec); err != nil {
                     return err
                 }
-
                 if err = binary.Read(buf, binary.LittleEndian, &m.{{ .GoName }}[i].NSec); err != nil {
                     return err
                 }
+            }
 {{-                  else }}
             if err = binary.Read(buf, binary.LittleEndian, &m.{{ .GoName }}[i]); err != nil {
                 return err
@@ -186,9 +190,11 @@ func (m *{{ .ShortName }}) Deserialize(buf *bytes.Reader) error {
             }
 {{-      	end }}
         }
+    }
 {{-    else }}
 {{-        if .IsBuiltin }}
 {{-            if eq .Type "string" }}
+    {
         var size uint32
         if err = binary.Read(buf, binary.LittleEndian, &size); err != nil {
             return err
@@ -198,15 +204,17 @@ func (m *{{ .ShortName }}) Deserialize(buf *bytes.Reader) error {
             return err
         }
         m.{{ .GoName }} = string(data)
+    }
 {{-            else }}
 {{-            		if or (eq .Type "time") (eq .Type "duration") }}
+    {
         if err = binary.Read(buf, binary.LittleEndian, &m.{{ .GoName }}.Sec); err != nil {
             return err
         }
-
         if err = binary.Read(buf, binary.LittleEndian, &m.{{ .GoName }}.NSec); err != nil {
             return err
         }
+    }
 {{-            		else }}
     if err = binary.Read(buf, binary.LittleEndian, &m.{{ .GoName }}); err != nil {
         return err

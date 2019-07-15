@@ -12,12 +12,12 @@ import (
 
 type simpleActionServer struct {
 	actionServer          *defaultActionServer
-	currentGoal           *status
-	nextGoal              *status
+	currentGoal           *serverGoalHandler
+	nextGoal              *serverGoalHandler
+	goalMutex             sync.RWMutex
 	newGoal               bool
 	preemptRequest        bool
 	newGoalPreemptRequest bool
-	goalMutex             sync.RWMutex
 	logger                ros.Logger
 	goalCallback          interface{}
 	preemptCallback       interface{}
@@ -33,7 +33,7 @@ func newSimpleActionServer(node ros.Node, action string, actType ActionType, exe
 	s.newGoalPreemptRequest = false
 	s.executeCb = executeCb
 	s.logger = node.Logger()
-	s.executorCh = make(chan struct{}, 10)
+	s.executorCh = make(chan struct{}, 100)
 	return s
 }
 
@@ -44,28 +44,32 @@ func (s *simpleActionServer) Start() {
 	s.actionServer.Start()
 }
 
-func (s *simpleActionServer) internalGoalCallback(goal ActionGoal) {
-	s.logger.Infof("Simple action server received new goal with id %s", goal.GetGoalId().Id)
+func (s *simpleActionServer) internalGoalCallback(ag ActionGoal) {
+	goalHandler := s.actionServer.getHandler(ag.GetGoalId().Id)
+	s.logger.Infof("Simple action server received new goal with id %s", goalHandler.GetGoalId().Id)
 
-	goalStamp := goal.GetGoalId().Stamp
-	nextGoalStamp := goal.GetGoalId().Stamp
-	newGoal := newStatusWithActionGoal(s.actionServer, goal)
+	var goalStamp, nextGoalStamp ros.Time
+	goalStamp = goalHandler.GetGoalId().Stamp
+	if s.nextGoal != nil {
+		nextGoalStamp = s.nextGoal.GetGoalId().Stamp
+	}
 
 	s.goalMutex.Lock()
 	defer s.goalMutex.Unlock()
 
-	if (s.currentGoal == nil || goalStamp.Cmp(s.currentGoal.getGoalID().Stamp) >= 0) &&
-		(s.currentGoal == nil || nextGoalStamp.Cmp(s.currentGoal.getGoalID().Stamp) >= 0) {
+	if (s.currentGoal == nil || goalStamp.Cmp(s.currentGoal.GetGoalId().Stamp) >= 0) &&
+		(s.nextGoal == nil || nextGoalStamp.Cmp(s.currentGoal.GetGoalId().Stamp) >= 0) {
 
-		if s.nextGoal != nil && (s.currentGoal == nil || s.nextGoal != s.currentGoal) {
-			s.nextGoal.setCancelled(nil,
+		if (s.nextGoal != nil) &&
+			(s.currentGoal == nil || s.nextGoal.NotEqual(s.currentGoal)) {
+			s.nextGoal.SetCancelled(s.GetDefaultResult(),
 				"This goal was canceled because another goal was received by the simple action server")
 		}
 
-		s.nextGoal = newGoal
+		s.nextGoal = goalHandler
 		s.newGoal = true
 		s.newGoalPreemptRequest = false
-		args := []reflect.Value{reflect.ValueOf(goal)}
+		args := []reflect.Value{reflect.ValueOf(goalHandler.GetGoal())}
 
 		if s.IsActive() {
 			s.preemptRequest = true
@@ -79,23 +83,29 @@ func (s *simpleActionServer) internalGoalCallback(goal ActionGoal) {
 		}
 
 		// notify executor that a new goal is available
-		s.executorCh <- struct{}{}
+		select {
+		case s.executorCh <- struct{}{}:
+		default:
+			s.logger.Error("Exectuor new goal notification error: Channel full.")
+		}
 	} else {
-		newGoal.setCancelled(nil,
+		goalHandler.SetCancelled(s.GetDefaultResult(),
 			"This goal was canceled because another goal was received by the simple action server")
 	}
 }
 
-func (s *simpleActionServer) internalPreemptCallback(preempt ActionGoal) {
+func (s *simpleActionServer) internalPreemptCallback(gID *actionlib_msgs.GoalID) {
 	s.goalMutex.Lock()
 	defer s.goalMutex.Unlock()
 
+	goalHandler := s.actionServer.getHandler(gID.Id)
 	s.logger.Infof("Simple action server received preempt call for goal with id %s",
-		preempt.GetGoalId().Id)
+		goalHandler.GetGoalId().Id)
 
-	if preempt == s.currentGoal.getGoal() {
+	if goalHandler.GetGoalId().Id == s.currentGoal.GetGoalId().Id {
 		s.preemptRequest = true
-		args := []reflect.Value{reflect.ValueOf(preempt)}
+		goal := goalHandler.GetGoal()
+		args := []reflect.Value{reflect.ValueOf(goal)}
 		if err := s.runCallback("preempt", args); err != nil {
 			s.logger.Error(err)
 		}
@@ -122,32 +132,38 @@ func (s *simpleActionServer) AcceptNewGoal() (ActionGoal, error) {
 	s.goalMutex.Lock()
 	defer s.goalMutex.Unlock()
 
-	if !s.newGoal || s.nextGoal.getGoal() == nil {
+	if !s.newGoal || s.nextGoal == nil {
 		return nil, fmt.Errorf("Attempting to accept the next goal when a new goal is not available")
 	}
 
-	if s.IsActive() && s.currentGoal.getGoal() != nil && s.currentGoal != s.nextGoal {
-		s.currentGoal.setCancelled(nil,
+	// check if we need to send a preempted message for the goal that we're currently pursuing
+	if s.IsActive() && s.currentGoal != nil && s.currentGoal != s.nextGoal {
+		s.currentGoal.SetCancelled(s.GetDefaultResult(),
 			"This goal was canceled because another goal was received by the simple action server")
 	}
 
-	fmt.Println("Accepting new goal")
+	s.logger.Debug("Accepting a new goal")
+
+	//accept the next goal
 	s.currentGoal = s.nextGoal
 	s.newGoal = false
-	s.preemptRequest = false
+
+	// set preempt to request to equal the preempt state of the new goal
+	s.preemptRequest = s.newGoalPreemptRequest
 	s.newGoalPreemptRequest = false
 
-	s.currentGoal.setAccepted("This goal has been accepted by the simple action server")
+	// set the status of the current goal to be active
+	s.currentGoal.SetAccepted("This goal has been accepted by the simple action server")
 
-	return s.currentGoal.getGoal(), nil
+	return s.currentGoal.GetGoal(), nil
 }
 
 func (s *simpleActionServer) IsActive() bool {
-	if s.currentGoal == nil || s.currentGoal.getGoalID().Id == "" {
+	if s.currentGoal == nil || s.currentGoal.GetGoalId().Id == "" {
 		return false
 	}
 
-	status := s.currentGoal.getGoalStatus().Status
+	status := s.currentGoal.GetGoalStatus().Status
 	if status == actionlib_msgs.ACTIVE || status == actionlib_msgs.PREEMPTING {
 		return true
 	}
@@ -163,7 +179,7 @@ func (s *simpleActionServer) SetSucceeded(result ActionResult, text string) erro
 		result = s.GetDefaultResult()
 	}
 
-	return s.currentGoal.setSucceeded(result, text)
+	return s.currentGoal.SetSucceeded(result, text)
 }
 
 func (s *simpleActionServer) SetAborted(result ActionResult, text string) error {
@@ -174,7 +190,7 @@ func (s *simpleActionServer) SetAborted(result ActionResult, text string) error 
 		result = s.GetDefaultResult()
 	}
 
-	return s.currentGoal.setAborted(result, text)
+	return s.currentGoal.SetAborted(result, text)
 }
 
 func (s *simpleActionServer) SetPreempted(result ActionResult, text string) error {
@@ -185,14 +201,14 @@ func (s *simpleActionServer) SetPreempted(result ActionResult, text string) erro
 		result = s.GetDefaultResult()
 	}
 
-	return s.currentGoal.setCancelled(result, text)
+	return s.currentGoal.SetCancelled(result, text)
 }
 
 func (s *simpleActionServer) PublishFeedback(feedback ActionFeedback) {
 	s.goalMutex.Lock()
 	defer s.goalMutex.Unlock()
 
-	s.currentGoal.publishFeedback(feedback)
+	s.currentGoal.PublishFeedback(feedback)
 }
 
 func (s *simpleActionServer) GetDefaultResult() ActionResult {
@@ -203,7 +219,9 @@ func (s *simpleActionServer) RegisterGoalCallback(cb interface{}) error {
 	if s.executeCb != nil {
 		return fmt.Errorf("execute callback if present: not registering goal callback")
 	}
+
 	s.goalCallback = cb
+
 	return nil
 }
 
@@ -253,8 +271,8 @@ func (s *simpleActionServer) execute() error {
 		}
 
 		if s.IsActive() {
-			s.logger.Warn("Your executeCallback did not set the goal to a terminal status.  " +
-				"This is a bug in your ActionServer implementation. Fix your code!  " +
+			s.logger.Warn("Your executeCallback did not set the goal to a terminal status." +
+				"This is a bug in your ActionServer implementation. Fix your code!" +
 				"For now, the ActionServer will set this goal to aborted")
 			if err := s.SetAborted(nil, ""); err != nil {
 				return err

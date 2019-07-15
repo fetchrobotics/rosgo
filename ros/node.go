@@ -534,6 +534,10 @@ func (node *defaultNode) NonRosArgs() []string {
 	return node.nonRosArgs
 }
 
+func (node *defaultNode) Name() string {
+	return node.name
+}
+
 func loadParamFromString(s string) (interface{}, error) {
 	decoder := json.NewDecoder(strings.NewReader(s))
 	var value interface{}

@@ -2,6 +2,7 @@ package actionlib
 
 import (
 	"actionlib_msgs"
+	"fmt"
 	"reflect"
 	"std_msgs"
 	"sync"
@@ -20,11 +21,12 @@ type defaultActionServer struct {
 	actionResultType  ros.MessageType
 	actionFeedback    ros.MessageType
 	actionGoal        ros.MessageType
-	statusList        []*status
 	statusMutex       sync.RWMutex
 	statusFrequency   ros.Rate
 	statusTimer       *time.Ticker
+	statusList        map[string]*serverGoalHandler
 	statusListTimeout ros.Duration
+	statusListMutex   sync.Mutex
 	goalCallback      interface{}
 	cancelCallback    interface{}
 	lastCancel        ros.Time
@@ -36,6 +38,7 @@ type defaultActionServer struct {
 	feedbackPub       ros.Publisher
 	statusPub         ros.Publisher
 	statusPubChan     chan struct{}
+	goalIdGen         *goalIdGenerator
 	shutdownChan      chan struct{}
 }
 
@@ -53,21 +56,28 @@ func newDefaultActionServer(node ros.Node, action string, actType ActionType, go
 	server.goalCallback = goalCb
 	server.cancelCallback = cancelCb
 	server.lastCancel = ros.Now()
-	server.goalSub = node.NewSubscriber(action+"/goal", actType.GoalType(), server.internalGoalCallback)
-	server.cancelSub = node.NewSubscriber(action+"/cancel", actionlib_msgs.MsgGoalID, server.internalCancelCallback)
-	server.resultPub = node.NewPublisher(action+"/result", actType.ResultType())
-	server.feedbackPub = node.NewPublisher(action+"/feedback", actType.FeedbackType())
-	server.statusPub = node.NewPublisher(action+"/status", actionlib_msgs.MsgGoalStatusArray)
-	server.statusPubChan = make(chan struct{}, 100)
-	server.shutdownChan = make(chan struct{}, 10)
+	server.goalIdGen = newGoalIdGenerator(node.Name())
+	return server
+}
+
+func (as *defaultActionServer) init() {
+	as.statusList = map[string]*serverGoalHandler{}
+	as.statusPubChan = make(chan struct{}, 10)
+	as.shutdownChan = make(chan struct{}, 10)
+
 	// get frequency from ros params
-	server.statusFrequency = ros.NewRate(5.0)
+	as.statusFrequency = ros.NewRate(5.0)
+
 	// get queue sizes from ros params
 	// queue sizes not implemented by ros.Node yet
-	server.pubQueueSize = 50
-	server.subQueueSize = 50
+	as.pubQueueSize = 50
+	as.subQueueSize = 50
 
-	return server
+	as.goalSub = as.node.NewSubscriber(fmt.Sprintf("%s/goal", as.action), as.actionType.GoalType(), as.internalGoalCallback)
+	as.cancelSub = as.node.NewSubscriber(fmt.Sprintf("%s/cancel", as.action), actionlib_msgs.MsgGoalID, as.internalCancelCallback)
+	as.resultPub = as.node.NewPublisher(fmt.Sprintf("%s/result", as.action), as.actionType.ResultType())
+	as.feedbackPub = as.node.NewPublisher(fmt.Sprintf("%s/feedback", as.action), as.actionType.FeedbackType())
+	as.statusPub = as.node.NewPublisher(fmt.Sprintf("%s/status", as.action), actionlib_msgs.MsgGoalStatusArray)
 }
 
 func (as *defaultActionServer) Start() {
@@ -77,8 +87,14 @@ func (as *defaultActionServer) Start() {
 		as.started = false
 	}()
 
+	// initialize subscribers and publishers
+	as.init()
+
+	// start status publish ticker that notifies at 5hz
+	// TODO(pavan) use ros.Rate instead of ticker
 	as.statusTimer = time.NewTicker(time.Second / 5.0)
 	defer as.statusTimer.Stop()
+
 	as.started = true
 
 	for {
@@ -87,7 +103,7 @@ func (as *defaultActionServer) Start() {
 			return
 
 		case <-as.statusTimer.C:
-			as.publishStatus()
+			as.PublishStatus()
 
 		case <-as.statusPubChan:
 			arr := as.getStatus()
@@ -97,7 +113,7 @@ func (as *defaultActionServer) Start() {
 }
 
 // publishResult publishes action result message
-func (as *defaultActionServer) publishResult(status actionlib_msgs.GoalStatus, result ros.Message) {
+func (as *defaultActionServer) PublishResult(status actionlib_msgs.GoalStatus, result ros.Message) {
 	msg := as.actionResult.NewMessage().(ActionResult)
 	msg.SetHeader(std_msgs.Header{Stamp: ros.Now()})
 	msg.SetStatus(status)
@@ -106,7 +122,7 @@ func (as *defaultActionServer) publishResult(status actionlib_msgs.GoalStatus, r
 }
 
 // publishFeedback publishes action feedback messages
-func (as *defaultActionServer) publishFeedback(status actionlib_msgs.GoalStatus, feedback ros.Message) {
+func (as *defaultActionServer) PublishFeedback(status actionlib_msgs.GoalStatus, feedback ros.Message) {
 	msg := as.actionFeedback.NewMessage().(ActionFeedback)
 	msg.SetHeader(std_msgs.Header{Stamp: ros.Now()})
 	msg.SetStatus(status)
@@ -116,55 +132,56 @@ func (as *defaultActionServer) publishFeedback(status actionlib_msgs.GoalStatus,
 
 // publishStatus publishes action status messages
 func (as *defaultActionServer) getStatus() *actionlib_msgs.GoalStatusArray {
-	var statArr []actionlib_msgs.GoalStatus
-	as.statusMutex.Lock()
-	defer as.statusMutex.Unlock()
+	as.statusListMutex.Lock()
+	defer as.statusListMutex.Unlock()
+	var stArr []actionlib_msgs.GoalStatus
 
 	if as.node.OK() {
-		for i, st := range as.statusList {
-			destTime := st.destroyTime.Add(as.statusListTimeout)
-			if !st.destroyTime.IsZero() && destTime.Cmp(ros.Now()) <= 0 {
-				as.statusList[i] = as.statusList[len(as.statusList)-1]
-				as.statusList[len(as.statusList)-1] = nil
-				as.statusList = as.statusList[:len(as.statusList)-1]
+		for id, gh := range as.statusList {
+			hTime := gh.GetHandlerDestructionTime()
+			destTime := hTime.Add(as.statusListTimeout)
+
+			if !hTime.IsZero() && destTime.Cmp(ros.Now()) <= 0 {
+				delete(as.statusList, id)
 				continue
 			}
 
-			statArr = append(statArr, st.getGoalStatus())
+			stArr = append(stArr, gh.GetGoalStatus())
 		}
 	}
 
 	arr := &actionlib_msgs.GoalStatusArray{}
 	arr.Header.Stamp = ros.Now()
-	arr.StatusList = statArr
+	arr.StatusList = stArr
 	return arr
 }
 
-func (as *defaultActionServer) publishStatus() {
+func (as *defaultActionServer) PublishStatus() {
 	as.statusPubChan <- struct{}{}
 }
 
 // internalCancelCallback recieves cancel message from client
-func (as *defaultActionServer) internalCancelCallback(goalID *actionlib_msgs.GoalID) {
-	logger := as.node.Logger()
-	logger.Debug("action server has received a new cancel request")
-
-	as.statusMutex.Lock()
-	defer as.statusMutex.Unlock()
+func (as *defaultActionServer) internalCancelCallback(goalID *actionlib_msgs.GoalID, event ros.MessageEvent) {
+	as.statusListMutex.Lock()
+	defer as.statusListMutex.Unlock()
 
 	goalFound := false
-	for _, st := range as.statusList {
+	logger := as.node.Logger()
+	logger.Debug("Action server has received a new cancel request")
+
+	for id, gh := range as.statusList {
 		cancelAll := (goalID.Id == "" && goalID.Stamp.IsZero())
-		cancelCurrent := (goalID.Id == st.goalStatus.GoalId.Id)
-		cancelBeforeStamp := (!goalID.Stamp.IsZero() && st.goalStatus.GoalId.Stamp.Cmp(goalID.Stamp) <= 0)
+		cancelCurrent := (goalID.Id == id)
+
+		st := gh.GetGoalStatus()
+		cancelBeforeStamp := (!goalID.Stamp.IsZero() && st.GoalId.Stamp.Cmp(goalID.Stamp) <= 0)
 
 		if cancelAll || cancelCurrent || cancelBeforeStamp {
-			if goalID.Id == st.goalStatus.GoalId.Id {
+			if goalID.Id == st.GoalId.Id {
 				goalFound = true
 			}
 
-			st.destroyTime = ros.Now()
-			if st.setCancelRequested() {
+			if gh.SetCancelRequested() {
 				args := []reflect.Value{reflect.ValueOf(goalID)}
 				fun := reflect.ValueOf(as.cancelCallback)
 				numArgsNeeded := fun.Type().NumIn()
@@ -177,13 +194,9 @@ func (as *defaultActionServer) internalCancelCallback(goalID *actionlib_msgs.Goa
 	}
 
 	if goalID.Id != "" && !goalFound {
-		st := newStatusWithGoalStatus(as, actionlib_msgs.GoalStatus{
-			GoalId: *goalID,
-			Status: actionlib_msgs.RECALLING,
-		})
-
-		as.statusList = append(as.statusList, st)
-		st.destroyTime = ros.Now()
+		gh := newServerGoalHandlerWithGoalId(as, goalID)
+		as.statusList[goalID.Id] = gh
+		gh.SetHandlerDestructionTime(ros.Now())
 	}
 
 	if goalID.Stamp.Cmp(as.lastCancel) > 0 {
@@ -194,42 +207,56 @@ func (as *defaultActionServer) internalCancelCallback(goalID *actionlib_msgs.Goa
 // internalGoalCallback recieves the goals from client and checks if
 // the goalID already exists in the status list. If not, it will call
 // server's goalCallback with goal that was recieved from the client.
-func (as *defaultActionServer) internalGoalCallback(goal ActionGoal) {
+func (as *defaultActionServer) internalGoalCallback(goal ActionGoal, event ros.MessageEvent) {
+	as.statusListMutex.Lock()
+	defer as.statusListMutex.Unlock()
+
 	logger := as.node.Logger()
 	goalID := goal.GetGoalId()
 
-	as.statusMutex.Lock()
-	defer as.statusMutex.Unlock()
-
-	for _, st := range as.statusList {
-		if goalID.Id == st.goalStatus.GoalId.Id {
-			logger.Debugf("Goal %s was already in the status list with status %+v", goalID.Id, st.goalStatus)
-			if st.goalStatus.Status == actionlib_msgs.RECALLING {
-				st.goalStatus.Status = actionlib_msgs.RECALLED
+	for id, gh := range as.statusList {
+		if goalID.Id == id {
+			st := gh.GetGoalStatus()
+			logger.Debugf("Goal %s was already in the status list with status %+v", goalID.Id, st.Status)
+			if st.Status == actionlib_msgs.RECALLING {
+				st.Status = actionlib_msgs.RECALLED
 				result := as.actionResultType.NewMessage()
-				as.publishResult(*st.goalStatus, result)
+				as.PublishResult(st, result)
 			}
 
-			st.destroyTime = ros.Now()
+			gh.SetHandlerDestructionTime(ros.Now())
 			return
 		}
 	}
 
-	st := newStatusWithActionGoal(as, goal)
-	as.statusList = append(as.statusList, st)
+	id := goalID.Id
+	if len(id) == 0 {
+		id = as.goalIdGen.generateID()
+		goal.SetGoalId(actionlib_msgs.GoalID{
+			Id:    id,
+			Stamp: goalID.Stamp,
+		})
+	}
 
+	gh := newServerGoalHandlerWithGoal(as, goal)
+	as.statusList[id] = gh
 	if !goalID.Stamp.IsZero() && goalID.Stamp.Cmp(as.lastCancel) <= 0 {
-		st.setCancelled(nil, "timestamp older than last goal cancel")
+		gh.SetCancelled(nil, "timestamp older than last goal cancel")
 		return
 	}
 
-	args := []reflect.Value{reflect.ValueOf(goal)}
+	args := []reflect.Value{reflect.ValueOf(goal), reflect.ValueOf(event)}
 	fun := reflect.ValueOf(as.goalCallback)
 	numArgsNeeded := fun.Type().NumIn()
 
 	if numArgsNeeded <= 1 {
 		fun.Call(args[0:numArgsNeeded])
 	}
+}
+
+func (as *defaultActionServer) getHandler(id string) *serverGoalHandler {
+	handler := as.statusList[id]
+	return handler
 }
 
 // RegisterGoalCallback replaces existing goal callback function with newly

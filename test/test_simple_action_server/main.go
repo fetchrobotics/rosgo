@@ -17,6 +17,7 @@ type callbacks struct {
 }
 
 func (c *callbacks) createServer(node ros.Node) {
+	c.logger = node.Logger()
 	c.as = actionlib.NewSimpleActionServer(
 		node, "fibonacci",
 		actionlib_tutorials.ActionFibonacci,
@@ -35,7 +36,7 @@ func (c *callbacks) executeCallback(msg *actionlib_tutorials.FibonacciActionGoal
 		if c.as.IsPreemptRequested() {
 			success = false
 			if err := c.as.SetPreempted(nil, ""); err != nil {
-				c.logger.Fatal(err)
+				c.logger.Error(err)
 			}
 			break
 		}
@@ -43,15 +44,18 @@ func (c *callbacks) executeCallback(msg *actionlib_tutorials.FibonacciActionGoal
 		val := feed.Sequence[i] + feed.Sequence[i-1]
 		feed.Sequence = append(feed.Sequence, val)
 
-		c.as.PublishFeedback(&actionlib_tutorials.FibonacciActionFeedback{})
-		time.Sleep(10 * time.Millisecond)
+		c.as.PublishFeedback(&actionlib_tutorials.FibonacciActionFeedback{
+			Feedback: feed,
+		})
+
+		time.Sleep(1000 * time.Millisecond)
 	}
 
 	if success {
 		ar := &actionlib_tutorials.FibonacciActionResult{}
 		ar.Result.Sequence = feed.Sequence
 		if err := c.as.SetSucceeded(ar, "goal"); err != nil {
-			c.logger.Fatal(err)
+			c.logger.Error(err)
 		}
 	}
 }

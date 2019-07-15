@@ -1,6 +1,8 @@
 package actionlib
 
 import (
+	"actionlib_msgs"
+
 	"github.com/fetchrobotics/rosgo/ros"
 )
 
@@ -8,30 +10,20 @@ func NewActionClient(node ros.Node, action string, actionType ActionType) Action
 	return newDefaultActionClient(node, action, actionType)
 }
 
-func NewActionServer(
-	node ros.Node,
-	action string,
-	actionType ActionType,
-	goalCb interface{},
-	cancelCb interface{},
-	autoStart bool,
-) ActionServer {
+func NewActionServer(node ros.Node, action string, actionType ActionType, goalCb, cancelCb interface{}, autoStart bool) ActionServer {
 	return newDefaultActionServer(node, action, actionType, goalCb, cancelCb, autoStart)
 }
 
-func NewSimpleActionServer(
-	node ros.Node,
-	action string,
-	actionType ActionType,
-	executeCb interface{},
-	autoStart bool,
-) SimpleActionServer {
+func NewSimpleActionServer(node ros.Node, action string, actionType ActionType, executeCb interface{}, autoStart bool) SimpleActionServer {
 	return newSimpleActionServer(node, action, actionType, executeCb, autoStart)
 }
 
 type ActionServer interface {
 	Start()
 	Shutdown()
+	PublishResult(actionlib_msgs.GoalStatus, ros.Message)
+	PublishFeedback(actionlib_msgs.GoalStatus, ros.Message)
+	PublishStatus()
 	RegisterGoalCallback(interface{})
 	RegisterCancelCallback(interface{})
 }

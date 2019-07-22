@@ -10,14 +10,14 @@ import (
 )
 
 type serverGoalHandler struct {
-	as                     *defaultActionServer
+	as                     ActionServer
 	sm                     *serverStateMachine
 	goal                   ActionGoal
 	handlerDestructionTime ros.Time
 	handlerMutex           sync.RWMutex
 }
 
-func newServerGoalHandlerWithGoal(as *defaultActionServer, goal ActionGoal) *serverGoalHandler {
+func newServerGoalHandlerWithGoal(as ActionServer, goal ActionGoal) *serverGoalHandler {
 	return &serverGoalHandler{
 		as:   as,
 		sm:   newServerStateMachine(goal.GetGoalId()),
@@ -25,7 +25,7 @@ func newServerGoalHandlerWithGoal(as *defaultActionServer, goal ActionGoal) *ser
 	}
 }
 
-func newServerGoalHandlerWithGoalId(as *defaultActionServer, goalId *actionlib_msgs.GoalID) *serverGoalHandler {
+func newServerGoalHandlerWithGoalId(as ActionServer, goalId *actionlib_msgs.GoalID) *serverGoalHandler {
 	return &serverGoalHandler{
 		as: as,
 		sm: newServerStateMachine(*goalId),
@@ -163,11 +163,11 @@ func (gh *serverGoalHandler) GetGoalStatus() actionlib_msgs.GoalStatus {
 	return actionlib_msgs.GoalStatus{}
 }
 
-func (gh *serverGoalHandler) Equal(other *serverGoalHandler) bool {
+func (gh *serverGoalHandler) Equal(other ServerGoalHandler) bool {
 	return gh.goal.GetGoalId().Id == other.GetGoalId().Id
 }
 
-func (gh *serverGoalHandler) NotEqual(other *serverGoalHandler) bool {
+func (gh *serverGoalHandler) NotEqual(other ServerGoalHandler) bool {
 	return !gh.Equal(other)
 }
 

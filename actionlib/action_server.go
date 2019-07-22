@@ -12,34 +12,34 @@ import (
 )
 
 type defaultActionServer struct {
-	node              ros.Node
-	autoStart         bool
-	started           bool
-	action            string
-	actionType        ActionType
-	actionResult      ros.MessageType
-	actionResultType  ros.MessageType
-	actionFeedback    ros.MessageType
-	actionGoal        ros.MessageType
-	statusMutex       sync.RWMutex
-	statusFrequency   ros.Rate
-	statusTimer       *time.Ticker
-	statusList        map[string]*serverGoalHandler
-	statusListTimeout ros.Duration
-	statusListMutex   sync.Mutex
-	goalCallback      interface{}
-	cancelCallback    interface{}
-	lastCancel        ros.Time
-	pubQueueSize      int
-	subQueueSize      int
-	goalSub           ros.Subscriber
-	cancelSub         ros.Subscriber
-	resultPub         ros.Publisher
-	feedbackPub       ros.Publisher
-	statusPub         ros.Publisher
-	statusPubChan     chan struct{}
-	goalIdGen         *goalIdGenerator
-	shutdownChan      chan struct{}
+	node             ros.Node
+	autoStart        bool
+	started          bool
+	action           string
+	actionType       ActionType
+	actionResult     ros.MessageType
+	actionResultType ros.MessageType
+	actionFeedback   ros.MessageType
+	actionGoal       ros.MessageType
+	statusMutex      sync.RWMutex
+	statusFrequency  ros.Rate
+	statusTimer      *time.Ticker
+	handlers         map[string]*serverGoalHandler
+	handlersTimeout  ros.Duration
+	handlersMutex    sync.Mutex
+	goalCallback     interface{}
+	cancelCallback   interface{}
+	lastCancel       ros.Time
+	pubQueueSize     int
+	subQueueSize     int
+	goalSub          ros.Subscriber
+	cancelSub        ros.Subscriber
+	resultPub        ros.Publisher
+	feedbackPub      ros.Publisher
+	statusPub        ros.Publisher
+	statusPubChan    chan struct{}
+	goalIdGen        *goalIdGenerator
+	shutdownChan     chan struct{}
 }
 
 func newDefaultActionServer(node ros.Node, action string, actType ActionType, goalCb interface{}, cancelCb interface{}, start bool) *defaultActionServer {
@@ -52,7 +52,7 @@ func newDefaultActionServer(node ros.Node, action string, actType ActionType, go
 	server.actionResult = actType.ResultType()
 	server.actionFeedback = actType.FeedbackType()
 	server.actionGoal = actType.GoalType()
-	server.statusListTimeout = ros.NewDuration(60, 0)
+	server.handlersTimeout = ros.NewDuration(60, 0)
 	server.goalCallback = goalCb
 	server.cancelCallback = cancelCb
 	server.lastCancel = ros.Now()
@@ -61,7 +61,6 @@ func newDefaultActionServer(node ros.Node, action string, actType ActionType, go
 }
 
 func (as *defaultActionServer) init() {
-	as.statusList = map[string]*serverGoalHandler{}
 	as.statusPubChan = make(chan struct{}, 10)
 	as.shutdownChan = make(chan struct{}, 10)
 
@@ -91,7 +90,6 @@ func (as *defaultActionServer) Start() {
 	as.init()
 
 	// start status publish ticker that notifies at 5hz
-	// TODO(pavan) use ros.Rate instead of ticker
 	as.statusTimer = time.NewTicker(time.Second / 5.0)
 	defer as.statusTimer.Stop()
 
@@ -132,17 +130,17 @@ func (as *defaultActionServer) PublishFeedback(status actionlib_msgs.GoalStatus,
 
 // publishStatus publishes action status messages
 func (as *defaultActionServer) getStatus() *actionlib_msgs.GoalStatusArray {
-	as.statusListMutex.Lock()
-	defer as.statusListMutex.Unlock()
+	as.handlersMutex.Lock()
+	defer as.handlersMutex.Unlock()
 	var stArr []actionlib_msgs.GoalStatus
 
 	if as.node.OK() {
-		for id, gh := range as.statusList {
+		for id, gh := range as.handlers {
 			hTime := gh.GetHandlerDestructionTime()
-			destTime := hTime.Add(as.statusListTimeout)
+			destTime := hTime.Add(as.handlersTimeout)
 
 			if !hTime.IsZero() && destTime.Cmp(ros.Now()) <= 0 {
-				delete(as.statusList, id)
+				delete(as.handlers, id)
 				continue
 			}
 
@@ -162,14 +160,14 @@ func (as *defaultActionServer) PublishStatus() {
 
 // internalCancelCallback recieves cancel message from client
 func (as *defaultActionServer) internalCancelCallback(goalID *actionlib_msgs.GoalID, event ros.MessageEvent) {
-	as.statusListMutex.Lock()
-	defer as.statusListMutex.Unlock()
+	as.handlersMutex.Lock()
+	defer as.handlersMutex.Unlock()
 
 	goalFound := false
 	logger := as.node.Logger()
 	logger.Debug("Action server has received a new cancel request")
 
-	for id, gh := range as.statusList {
+	for id, gh := range as.handlers {
 		cancelAll := (goalID.Id == "" && goalID.Stamp.IsZero())
 		cancelCurrent := (goalID.Id == id)
 
@@ -195,7 +193,7 @@ func (as *defaultActionServer) internalCancelCallback(goalID *actionlib_msgs.Goa
 
 	if goalID.Id != "" && !goalFound {
 		gh := newServerGoalHandlerWithGoalId(as, goalID)
-		as.statusList[goalID.Id] = gh
+		as.handlers[goalID.Id] = gh
 		gh.SetHandlerDestructionTime(ros.Now())
 	}
 
@@ -208,13 +206,13 @@ func (as *defaultActionServer) internalCancelCallback(goalID *actionlib_msgs.Goa
 // the goalID already exists in the status list. If not, it will call
 // server's goalCallback with goal that was recieved from the client.
 func (as *defaultActionServer) internalGoalCallback(goal ActionGoal, event ros.MessageEvent) {
-	as.statusListMutex.Lock()
-	defer as.statusListMutex.Unlock()
+	as.handlersMutex.Lock()
+	defer as.handlersMutex.Unlock()
 
 	logger := as.node.Logger()
 	goalID := goal.GetGoalId()
 
-	for id, gh := range as.statusList {
+	for id, gh := range as.handlers {
 		if goalID.Id == id {
 			st := gh.GetGoalStatus()
 			logger.Debugf("Goal %s was already in the status list with status %+v", goalID.Id, st.Status)
@@ -239,7 +237,7 @@ func (as *defaultActionServer) internalGoalCallback(goal ActionGoal, event ros.M
 	}
 
 	gh := newServerGoalHandlerWithGoal(as, goal)
-	as.statusList[id] = gh
+	as.handlers[id] = gh
 	if !goalID.Stamp.IsZero() && goalID.Stamp.Cmp(as.lastCancel) <= 0 {
 		gh.SetCancelled(nil, "timestamp older than last goal cancel")
 		return
@@ -255,7 +253,7 @@ func (as *defaultActionServer) internalGoalCallback(goal ActionGoal, event ros.M
 }
 
 func (as *defaultActionServer) getHandler(id string) *serverGoalHandler {
-	handler := as.statusList[id]
+	handler := as.handlers[id]
 	return handler
 }
 

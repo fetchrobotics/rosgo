@@ -137,7 +137,7 @@ func (s *simpleActionServer) AcceptNewGoal() (ActionGoal, error) {
 	}
 
 	// check if we need to send a preempted message for the goal that we're currently pursuing
-	if s.IsActive() && s.currentGoal != nil && s.currentGoal != s.nextGoal {
+	if s.IsActive() && s.currentGoal != nil && s.currentGoal.NotEqual(s.nextGoal) {
 		s.currentGoal.SetCancelled(s.GetDefaultResult(),
 			"This goal was canceled because another goal was received by the simple action server")
 	}

@@ -50,6 +50,7 @@ func NewNode(name string, args []string) (Node, error) {
 
 type Publisher interface {
 	Publish(msg Message)
+	GetNumSubscribers() int
 	Shutdown()
 }
 

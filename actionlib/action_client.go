@@ -2,11 +2,9 @@ package actionlib
 
 import (
 	"actionlib_msgs"
-	"context"
 	"fmt"
 	"std_msgs"
 	"sync"
-	"time"
 
 	"github.com/fetchrobotics/rosgo/ros"
 )
@@ -69,8 +67,7 @@ func (ac *defaultActionClient) SendGoal(goal ros.Message, transitionCb, feedback
 	ag.SetHeader(header)
 	ac.PublishActionGoal(ag)
 
-	sm := newClientStateMachine(ac, ag, ac.actionType, transitionCb, feedbackCb)
-	handler := newClientGoalHandler(ac, sm)
+	handler := newClientGoalHandler(ac, ag, transitionCb, feedbackCb)
 
 	ac.handlersMutex.Lock()
 	ac.handlers = append(ac.handlers, handler)
@@ -98,10 +95,6 @@ func (ac *defaultActionClient) CancelAllGoalsBeforeTime(stamp ros.Time) {
 	ac.cancelPub.Publish(cancelMsg)
 }
 
-func (ac *defaultActionClient) IsActive() {
-
-}
-
 func (ac *defaultActionClient) Shutdown() {
 	ac.handlersMutex.Lock()
 	defer ac.handlersMutex.Unlock()
@@ -127,9 +120,11 @@ func (ac *defaultActionClient) PublishCancel(cancel *actionlib_msgs.GoalID) {
 	}
 }
 
-func (ac *defaultActionClient) WaitForServer(ctx context.Context) bool {
+func (ac *defaultActionClient) WaitForServer(timeout ros.Duration) bool {
 	started := false
 	ac.logger.Info("[actionlib] Starting to wait for action server to start")
+	rate := ros.CycleTime(ros.NewDuration(0, 10000000))
+	waitStart := ros.Now()
 
 LOOP:
 	for !started {
@@ -140,11 +135,13 @@ LOOP:
 		sPubs := ac.statusSub.GetNumPublishers()
 		started = (gSubs > 0 && cSubs > 0 && fPubs > 0 && rPubs > 0 && sPubs > 0)
 
-		select {
-		case <-ctx.Done():
+		now := ros.Now()
+		diff := now.Diff(waitStart)
+		if diff.Cmp(timeout) >= 0 {
 			break LOOP
-		case <-time.After(10 * time.Millisecond):
 		}
+
+		rate.Sleep()
 	}
 
 	if started {
@@ -159,8 +156,7 @@ func (ac *defaultActionClient) internalResultCallback(result ActionResult, event
 	defer ac.handlersMutex.RUnlock()
 
 	for _, h := range ac.handlers {
-		handler := h
-		if err := handler.GetStateMachine().updateResult(result, handler); err != nil {
+		if err := h.updateResult(result); err != nil {
 			ac.logger.Error(err)
 		}
 	}
@@ -171,8 +167,7 @@ func (ac *defaultActionClient) internalFeedbackCallback(feedback ActionFeedback,
 	defer ac.handlersMutex.RUnlock()
 
 	for _, h := range ac.handlers {
-		handler := h
-		handler.GetStateMachine().updateFeedback(feedback, handler)
+		h.updateFeedback(feedback)
 	}
 }
 
@@ -188,10 +183,8 @@ func (ac *defaultActionClient) internalStatusCallback(statusArr *actionlib_msgs.
 	}
 
 	ac.callerID = event.PublisherName
-
 	for _, h := range ac.handlers {
-		handler := h
-		if err := handler.GetStateMachine().updateStatus(statusArr, handler); err != nil {
+		if err := h.updateStatus(statusArr); err != nil {
 			ac.logger.Error(err)
 		}
 	}

@@ -44,76 +44,6 @@ func (s *simpleActionServer) Start() {
 	s.actionServer.Start()
 }
 
-func (s *simpleActionServer) internalGoalCallback(ag ActionGoal) {
-	goalHandler := s.actionServer.getHandler(ag.GetGoalId().Id)
-	s.logger.Infof("Simple action server received new goal with id %s", goalHandler.GetGoalId().Id)
-
-	var goalStamp, nextGoalStamp ros.Time
-	goalStamp = goalHandler.GetGoalId().Stamp
-	if s.nextGoal != nil {
-		nextGoalStamp = s.nextGoal.GetGoalId().Stamp
-	}
-
-	s.goalMutex.Lock()
-	defer s.goalMutex.Unlock()
-
-	if (s.currentGoal == nil || goalStamp.Cmp(s.currentGoal.GetGoalId().Stamp) >= 0) &&
-		(s.nextGoal == nil || nextGoalStamp.Cmp(s.currentGoal.GetGoalId().Stamp) >= 0) {
-
-		if (s.nextGoal != nil) &&
-			(s.currentGoal == nil || s.nextGoal.NotEqual(s.currentGoal)) {
-			s.nextGoal.SetCancelled(s.GetDefaultResult(),
-				"This goal was canceled because another goal was received by the simple action server")
-		}
-
-		s.nextGoal = goalHandler
-		s.newGoal = true
-		s.newGoalPreemptRequest = false
-		args := []reflect.Value{reflect.ValueOf(goalHandler.GetGoal())}
-
-		if s.IsActive() {
-			s.preemptRequest = true
-			if err := s.runCallback("preempt", args); err != nil {
-				s.logger.Error(err)
-			}
-		}
-
-		if err := s.runCallback("goal", args); err != nil {
-			s.logger.Error(err)
-		}
-
-		// notify executor that a new goal is available
-		select {
-		case s.executorCh <- struct{}{}:
-		default:
-			s.logger.Error("Exectuor new goal notification error: Channel full.")
-		}
-	} else {
-		goalHandler.SetCancelled(s.GetDefaultResult(),
-			"This goal was canceled because another goal was received by the simple action server")
-	}
-}
-
-func (s *simpleActionServer) internalPreemptCallback(gID *actionlib_msgs.GoalID) {
-	s.goalMutex.Lock()
-	defer s.goalMutex.Unlock()
-
-	goalHandler := s.actionServer.getHandler(gID.Id)
-	s.logger.Infof("Simple action server received preempt call for goal with id %s",
-		goalHandler.GetGoalId().Id)
-
-	if goalHandler.GetGoalId().Id == s.currentGoal.GetGoalId().Id {
-		s.preemptRequest = true
-		goal := goalHandler.GetGoal()
-		args := []reflect.Value{reflect.ValueOf(goal)}
-		if err := s.runCallback("preempt", args); err != nil {
-			s.logger.Error(err)
-		}
-	} else {
-		s.newGoalPreemptRequest = true
-	}
-}
-
 func (s *simpleActionServer) IsNewGoalAvailable() bool {
 	s.goalMutex.Lock()
 	defer s.goalMutex.Unlock()
@@ -133,7 +63,7 @@ func (s *simpleActionServer) AcceptNewGoal() (ActionGoal, error) {
 	defer s.goalMutex.Unlock()
 
 	if !s.newGoal || s.nextGoal == nil {
-		return nil, fmt.Errorf("Attempting to accept the next goal when a new goal is not available")
+		return nil, fmt.Errorf("attempting to accept the next goal when a new goal is not available")
 	}
 
 	// check if we need to send a preempted message for the goal that we're currently pursuing
@@ -229,6 +159,76 @@ func (s *simpleActionServer) RegisterPreemptCallback(cb interface{}) {
 	s.preemptCallback = cb
 }
 
+func (s *simpleActionServer) internalGoalCallback(ag ActionGoal) {
+	goalHandler := s.actionServer.getHandler(ag.GetGoalId().Id)
+	s.logger.Infof("Simple action server received new goal with id %s", goalHandler.GetGoalId().Id)
+
+	var goalStamp, nextGoalStamp ros.Time
+	goalStamp = goalHandler.GetGoalId().Stamp
+	if s.nextGoal != nil {
+		nextGoalStamp = s.nextGoal.GetGoalId().Stamp
+	}
+
+	s.goalMutex.Lock()
+	defer s.goalMutex.Unlock()
+
+	if (s.currentGoal == nil || goalStamp.Cmp(s.currentGoal.GetGoalId().Stamp) >= 0) &&
+		(s.nextGoal == nil || nextGoalStamp.Cmp(s.currentGoal.GetGoalId().Stamp) >= 0) {
+
+		if (s.nextGoal != nil) &&
+			(s.currentGoal == nil || s.nextGoal.NotEqual(s.currentGoal)) {
+			s.nextGoal.SetCancelled(s.GetDefaultResult(),
+				"This goal was canceled because another goal was received by the simple action server")
+		}
+
+		s.nextGoal = goalHandler
+		s.newGoal = true
+		s.newGoalPreemptRequest = false
+		args := []reflect.Value{reflect.ValueOf(goalHandler.GetGoal())}
+
+		if s.IsActive() {
+			s.preemptRequest = true
+			if err := s.runCallback("preempt", args); err != nil {
+				s.logger.Error(err)
+			}
+		}
+
+		if err := s.runCallback("goal", args); err != nil {
+			s.logger.Error(err)
+		}
+
+		// notify executor that a new goal is available
+		select {
+		case s.executorCh <- struct{}{}:
+		default:
+			s.logger.Error("Exectuor new goal notification error: Channel full.")
+		}
+	} else {
+		goalHandler.SetCancelled(s.GetDefaultResult(),
+			"This goal was canceled because another goal was received by the simple action server")
+	}
+}
+
+func (s *simpleActionServer) internalPreemptCallback(gID *actionlib_msgs.GoalID) {
+	s.goalMutex.Lock()
+	defer s.goalMutex.Unlock()
+
+	goalHandler := s.actionServer.getHandler(gID.Id)
+	s.logger.Infof("Simple action server received preempt call for goal with id %s",
+		goalHandler.GetGoalId().Id)
+
+	if goalHandler.GetGoalId().Id == s.currentGoal.GetGoalId().Id {
+		s.preemptRequest = true
+		goal := goalHandler.GetGoal()
+		args := []reflect.Value{reflect.ValueOf(goal)}
+		if err := s.runCallback("preempt", args); err != nil {
+			s.logger.Error(err)
+		}
+	} else {
+		s.newGoalPreemptRequest = true
+	}
+}
+
 func (s *simpleActionServer) goalExecutor() {
 	intervalCh := time.NewTicker(1 * time.Second)
 	defer intervalCh.Stop()
@@ -252,7 +252,7 @@ func (s *simpleActionServer) goalExecutor() {
 
 func (s *simpleActionServer) execute() error {
 	if s.IsActive() {
-		return fmt.Errorf("Should never reach this code with an active goal")
+		return fmt.Errorf("should never reach this code with an active goal")
 	}
 
 	if s.IsNewGoalAvailable() {
@@ -262,7 +262,7 @@ func (s *simpleActionServer) execute() error {
 		}
 
 		if s.executeCb == nil {
-			return fmt.Errorf("Execute callback must exist. This is a bug in SimpleActionServer")
+			return fmt.Errorf("execute callback must exist. This is a bug in SimpleActionServer")
 		}
 
 		args := []reflect.Value{reflect.ValueOf(goal)}
@@ -306,7 +306,7 @@ func (s *simpleActionServer) runCallback(cbType string, args []reflect.Value) er
 	if numArgsNeeded <= 1 {
 		fun.Call(args[0:numArgsNeeded])
 	} else {
-		return fmt.Errorf("Unexepcted number of arguments for callback")
+		return fmt.Errorf("unexepcted number of arguments for callback")
 	}
 
 	return nil

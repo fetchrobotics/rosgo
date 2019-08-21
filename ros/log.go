@@ -105,6 +105,7 @@ func (logger *defaultLogger) Fatal(v ...interface{}) {
 	if int(logger.severity) <= int(LogLevelFatal) {
 		msg := fmt.Sprintf("[FATAL] %s", fmt.Sprint(v...))
 		log.Println(msg)
+		os.Exit(1)
 	}
 }
 

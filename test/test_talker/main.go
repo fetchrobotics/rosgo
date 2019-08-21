@@ -2,10 +2,14 @@ package main
 
 //go:generate gengo msg std_msgs/String
 import (
+	"actionlib_tutorials"
 	"fmt"
 	"os"
 	"std_msgs"
 	"time"
+
+	"github.com/fetchrobotics/rosgo/ros"
+)
 
 	"github.com/fetchrobotics/rosgo/ros"
 )

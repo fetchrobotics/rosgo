@@ -174,7 +174,7 @@ func newDefaultNode(name string, args []string) (*defaultNode, error) {
 
 	listener, err := net.Listen("tcp", ":0")
 	if err != nil {
-		logger.Fatal(err)
+		logger.Fatalf("NewDefaultNode: %v", err)
 		return nil, err
 	}
 	_, port, err := net.SplitHostPort(listener.Addr().String())

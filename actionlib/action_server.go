@@ -43,26 +43,29 @@ type defaultActionServer struct {
 }
 
 func newDefaultActionServer(node ros.Node, action string, actType ActionType, goalCb interface{}, cancelCb interface{}, start bool) *defaultActionServer {
-	server := new(defaultActionServer)
-	server.node = node
-	server.autoStart = start
-	server.started = false
-	server.action = action
-	server.actionType = actType
-	server.actionResult = actType.ResultType()
-	server.actionFeedback = actType.FeedbackType()
-	server.actionGoal = actType.GoalType()
-	server.handlersTimeout = ros.NewDuration(60, 0)
-	server.goalCallback = goalCb
-	server.cancelCallback = cancelCb
-	server.lastCancel = ros.Now()
-	server.goalIdGen = newGoalIdGenerator(node.Name())
-	return server
+	return &defaultActionServer{
+		node:            node,
+		autoStart:       start,
+		started:         false,
+		action:          action,
+		actionType:      actType,
+		actionResult:    actType.ResultType(),
+		actionFeedback:  actType.FeedbackType(),
+		actionGoal:      actType.GoalType(),
+		handlersTimeout: ros.NewDuration(60, 0),
+		goalCallback:    goalCb,
+		cancelCallback:  cancelCb,
+		lastCancel:      ros.Now(),
+	}
 }
 
 func (as *defaultActionServer) init() {
 	as.statusPubChan = make(chan struct{}, 10)
 	as.shutdownChan = make(chan struct{}, 10)
+
+	// setup goal id generator and goal handlers
+	as.goalIdGen = newGoalIdGenerator(as.node.Name())
+	as.handlers = map[string]*serverGoalHandler{}
 
 	// get frequency from ros params
 	as.statusFrequency = ros.NewRate(5.0)
@@ -110,7 +113,7 @@ func (as *defaultActionServer) Start() {
 	}
 }
 
-// publishResult publishes action result message
+// PublishResult publishes action result message
 func (as *defaultActionServer) PublishResult(status actionlib_msgs.GoalStatus, result ros.Message) {
 	msg := as.actionResult.NewMessage().(ActionResult)
 	msg.SetHeader(std_msgs.Header{Stamp: ros.Now()})
@@ -119,7 +122,7 @@ func (as *defaultActionServer) PublishResult(status actionlib_msgs.GoalStatus, r
 	as.resultPub.Publish(msg)
 }
 
-// publishFeedback publishes action feedback messages
+// PublishFeedback publishes action feedback messages
 func (as *defaultActionServer) PublishFeedback(status actionlib_msgs.GoalStatus, feedback ros.Message) {
 	msg := as.actionFeedback.NewMessage().(ActionFeedback)
 	msg.SetHeader(std_msgs.Header{Stamp: ros.Now()})
@@ -128,7 +131,6 @@ func (as *defaultActionServer) PublishFeedback(status actionlib_msgs.GoalStatus,
 	as.feedbackPub.Publish(msg)
 }
 
-// publishStatus publishes action status messages
 func (as *defaultActionServer) getStatus() *actionlib_msgs.GoalStatusArray {
 	as.handlersMutex.Lock()
 	defer as.handlersMutex.Unlock()
@@ -136,10 +138,10 @@ func (as *defaultActionServer) getStatus() *actionlib_msgs.GoalStatusArray {
 
 	if as.node.OK() {
 		for id, gh := range as.handlers {
-			hTime := gh.GetHandlerDestructionTime()
-			destTime := hTime.Add(as.handlersTimeout)
+			handlerTime := gh.GetHandlerDestructionTime()
+			destTime := handlerTime.Add(as.handlersTimeout)
 
-			if !hTime.IsZero() && destTime.Cmp(ros.Now()) <= 0 {
+			if !handlerTime.IsZero() && destTime.Cmp(ros.Now()) <= 0 {
 				delete(as.handlers, id)
 				continue
 			}

@@ -7,34 +7,37 @@ import (
 )
 
 type serverStateMachine struct {
-	st    actionlib_msgs.GoalStatus
-	mutex sync.RWMutex
+	goalStatus actionlib_msgs.GoalStatus
+	mutex      sync.RWMutex
 }
 
+type Event uint8
+
 const (
-	CancelRequest uint8 = 1
-	Cancel        uint8 = 2
-	Reject        uint8 = 3
-	Accept        uint8 = 4
-	Succeed       uint8 = 5
-	Abort         uint8 = 6
+	CancelRequest Event = 1
+	Cancel        Event = 2
+	Reject        Event = 3
+	Accept        Event = 4
+	Succeed       Event = 5
+	Abort         Event = 6
 )
 
 func newServerStateMachine(goalID actionlib_msgs.GoalID) *serverStateMachine {
-	sm := new(serverStateMachine)
-	sm.st.GoalId = goalID
-	sm.st.Status = actionlib_msgs.PENDING
-
-	return sm
+	return &serverStateMachine{
+		goalStatus: actionlib_msgs.GoalStatus{
+			GoalId: goalID,
+			Status: actionlib_msgs.PENDING,
+		},
+	}
 }
 
-func (sm *serverStateMachine) transition(event uint8, text string) (actionlib_msgs.GoalStatus, error) {
+func (sm *serverStateMachine) transition(event Event, text string) (actionlib_msgs.GoalStatus, error) {
 	sm.mutex.Lock()
 	defer sm.mutex.Unlock()
 
-	nextState := sm.st.Status
+	nextState := sm.goalStatus.Status
 
-	switch sm.st.Status {
+	switch sm.goalStatus.Status {
 	case actionlib_msgs.PENDING:
 		switch event {
 		case Reject:
@@ -50,7 +53,7 @@ func (sm *serverStateMachine) transition(event uint8, text string) (actionlib_ms
 			nextState = actionlib_msgs.ACTIVE
 			break
 		default:
-			return sm.st, fmt.Errorf("invalid transition Event")
+			return sm.goalStatus, fmt.Errorf("invalid transition Event")
 		}
 
 	case actionlib_msgs.RECALLING:
@@ -65,7 +68,7 @@ func (sm *serverStateMachine) transition(event uint8, text string) (actionlib_ms
 			nextState = actionlib_msgs.PREEMPTING
 			break
 		default:
-			return sm.st, fmt.Errorf("invalid transition Event")
+			return sm.goalStatus, fmt.Errorf("invalid transition Event")
 		}
 
 	case actionlib_msgs.ACTIVE:
@@ -83,7 +86,7 @@ func (sm *serverStateMachine) transition(event uint8, text string) (actionlib_ms
 			nextState = actionlib_msgs.ABORTED
 			break
 		default:
-			return sm.st, fmt.Errorf("invalid transition Event")
+			return sm.goalStatus, fmt.Errorf("invalid transition Event")
 		}
 
 	case actionlib_msgs.PREEMPTING:
@@ -98,7 +101,7 @@ func (sm *serverStateMachine) transition(event uint8, text string) (actionlib_ms
 			nextState = actionlib_msgs.ABORTED
 			break
 		default:
-			return sm.st, fmt.Errorf("invalid transition Event")
+			return sm.goalStatus, fmt.Errorf("invalid transition Event")
 		}
 	case actionlib_msgs.REJECTED:
 		break
@@ -111,18 +114,18 @@ func (sm *serverStateMachine) transition(event uint8, text string) (actionlib_ms
 	case actionlib_msgs.ABORTED:
 		break
 	default:
-		return sm.st, fmt.Errorf("invalid state")
+		return sm.goalStatus, fmt.Errorf("invalid state")
 	}
 
-	sm.st.Status = nextState
-	sm.st.Text = text
+	sm.goalStatus.Status = nextState
+	sm.goalStatus.Text = text
 
-	return sm.st, nil
+	return sm.goalStatus, nil
 }
 
 func (sm *serverStateMachine) getStatus() actionlib_msgs.GoalStatus {
 	sm.mutex.RLock()
 	defer sm.mutex.RUnlock()
 
-	return sm.st
+	return sm.goalStatus
 }

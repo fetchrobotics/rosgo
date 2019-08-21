@@ -107,21 +107,22 @@ func (c *defaultServiceClient) Call(srv Service) error {
 	conn.SetDeadline(time.Now().Add(10 * time.Millisecond))
 	if err := binary.Read(conn, binary.LittleEndian, &ok); err != nil {
 		return err
-	} else {
-		if ok == 0 {
-			var size uint32
-			conn.SetDeadline(time.Now().Add(10 * time.Millisecond))
-			if err := binary.Read(conn, binary.LittleEndian, &size); err != nil {
-				return err
-			}
-			errMsg := make([]byte, int(size))
-			conn.SetDeadline(time.Now().Add(10 * time.Millisecond))
-			if _, err := io.ReadFull(conn, errMsg); err != nil {
-				return err
-			} else {
-				return errors.New(string(errMsg))
-			}
+	}
+
+	if ok == 0 {
+		var size uint32
+		conn.SetDeadline(time.Now().Add(10 * time.Millisecond))
+		if err := binary.Read(conn, binary.LittleEndian, &size); err != nil {
+			return err
 		}
+
+		errMsg := make([]byte, int(size))
+		conn.SetDeadline(time.Now().Add(10 * time.Millisecond))
+		if _, err := io.ReadFull(conn, errMsg); err != nil {
+			return err
+		}
+
+		return errors.New(string(errMsg))
 	}
 
 	// 5. Receive response

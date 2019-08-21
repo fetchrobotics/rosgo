@@ -12,14 +12,26 @@ import (
 )
 
 const (
-	HeaderType     = "Header"
-	TimeType       = "time"
-	DurationType   = "duration"
+	// HeaderType is type definition of ROS message `std_msgs/Header`
+	HeaderType = "Header"
+
+	// TimeType is type definition of ROS primitive `time`
+	TimeType = "time"
+
+	// DurationType is type definition of ROS primitive `duration`
+	DurationType = "duration"
+
+	// HeaderFullName is type definition of Header along with the package name
 	HeaderFullName = "std_msgs/Header"
-	TimeMsg        = "uint32 secs\nuint32 nsecs"
-	DurationMsg    = "uint32 secs\nuint32 nsecs"
+
+	// TimeMsg is message definition of ROS primitive `time`
+	TimeMsg = "uint32 secs\nuint32 nsecs"
+
+	// DurationMsg is message definition of ROS primitive `duration`
+	DurationMsg = "uint32 secs\nuint32 nsecs"
 )
 
+// PrimitiveTypes defines a list of standard primitive types that are part of ROS
 var PrimitiveTypes = []string{
 	"int8",
 	"uint8", "int16", "uint16", "int32", "uint32", "int64", "uint64", "float32", "float64",
@@ -29,10 +41,13 @@ var PrimitiveTypes = []string{
 	"char", "byte",
 }
 
+// BuiltinTypes defines a list of ROS built-in types that are part of ROS
 var BuiltinTypes = append([]string{TimeType, DurationType}, PrimitiveTypes...)
 
+// ResourceNameLegalCharsPattern defines a regex pattern for legal characters in resource name
 var ResourceNameLegalCharsPattern = regexp.MustCompile(`^[A-Za-z][\w_\/]*$`)
 
+// BaseResourceNameLegalCharsPattern defines a regex pattern for legal characters in base resource name
 var BaseResourceNameLegalCharsPattern = regexp.MustCompile(`"[A-Za-z][\w_]*$`)
 
 func isValidConsantType(t string) bool {
@@ -81,18 +96,16 @@ func baseMsgType(t string) string {
 	index := strings.Index(t, "[")
 	if index < 0 {
 		return t
-	} else {
-		return t[:index]
 	}
+	return t[:index]
 }
 
 func splitType(t string) (string, string) {
 	components := strings.Split(t, "/")
 	if len(components) == 1 {
 		return "", t
-	} else {
-		return components[0], components[1]
 	}
+	return components[0], components[1]
 }
 
 func parseType(msgType string) (pkg string, baseType string, isArray bool, arrayLen int, err error) {
@@ -100,25 +113,22 @@ func parseType(msgType string) (pkg string, baseType string, isArray bool, array
 	if index < 0 {
 		pkg, name := splitType(msgType)
 		return pkg, name, false, 0, nil
-	} else {
-		if msgType[len(msgType)-1] == ']' {
-			base := msgType[:index]
-			rest := msgType[index:]
-			pkg, name := splitType(base)
-			if rest == "[]" {
-				return pkg, name, true, -1, nil
-			} else {
-				value64, err := strconv.ParseInt(rest[1:len(rest)-1], 10, 32)
-				if err != nil {
-					return pkg, name, false, 0, err
-				}
-				value := int(value64)
-				return pkg, name, true, value, nil
-			}
-		} else {
-			return "", msgType, false, 0, fmt.Errorf("missing ']'")
-		}
 	}
+	if msgType[len(msgType)-1] == ']' {
+		base := msgType[:index]
+		rest := msgType[index:]
+		pkg, name := splitType(base)
+		if rest == "[]" {
+			return pkg, name, true, -1, nil
+		}
+		value64, err := strconv.ParseInt(rest[1:len(rest)-1], 10, 32)
+		if err != nil {
+			return pkg, name, false, 0, err
+		}
+		value := int(value64)
+		return pkg, name, true, value, nil
+	}
+	return "", msgType, false, 0, fmt.Errorf("missing ']'")
 }
 
 func isValidMsgType(t string) bool {
@@ -167,14 +177,7 @@ func isHeaderType(name string) bool {
 	return patterns[name]
 }
 
-type Constant struct {
-	Type      string
-	Name      string
-	Value     interface{}
-	ValueText string
-	GoName    string
-}
-
+// ToGoType converts a field from ROS built-in type to Go type
 func ToGoType(pkg string, typeName string) string {
 	var goType string
 	switch typeName {
@@ -216,6 +219,7 @@ func ToGoType(pkg string, typeName string) string {
 	return goType
 }
 
+// ToGoName transforms a field name from ROS convention to Go convention
 func ToGoName(name string, constant bool) string {
 	if constant {
 		return strings.ToUpper(name)
@@ -234,6 +238,7 @@ func ToGoName(name string, constant bool) string {
 	return strings.Join(buffer, "")
 }
 
+// GetZeroValue returns the zero value for the provided ROS built-in type
 func GetZeroValue(pkg string, typeName string) string {
 	var zeroValue string
 	switch typeName {
@@ -275,15 +280,28 @@ func GetZeroValue(pkg string, typeName string) string {
 	return zeroValue
 }
 
+// Constant represents a constant field in a ROS message
+type Constant struct {
+	Type      string
+	Name      string
+	Value     interface{}
+	ValueText string
+	GoName    string
+}
+
+// NewConstant creates and returns a new instance of Constant based on constant definition in ROS message
 func NewConstant(fieldType string, name string, value interface{}, valueText string) *Constant {
 	goName := ToGoName(name, true)
 	return &Constant{fieldType, name, value, valueText, goName}
 }
 
+// String implements stringer interface
+// Returns ROS message representation of the constant
 func (c *Constant) String() string {
 	return fmt.Sprintf("%s %s = %v", c.Type, c.Name, c.Value)
 }
 
+// Field represents a non-constant field in a ROS message
 type Field struct {
 	Package   string
 	Type      string
@@ -296,6 +314,7 @@ type Field struct {
 	ZeroValue string
 }
 
+// NewField creates and returns a new instance of Field based on field definition is ROS message
 func NewField(pkg string, fieldType string, name string, isArray bool, arrayLen int) *Field {
 	goType := ToGoType(pkg, fieldType)
 	goName := ToGoName(name, false)
@@ -304,6 +323,8 @@ func NewField(pkg string, fieldType string, name string, isArray bool, arrayLen 
 	return &Field{pkg, fieldType, name, isBuiltin, isArray, arrayLen, goName, goType, zeroValue}
 }
 
+// String implements stringer interface
+// Returns ROS message representation of the field
 func (f *Field) String() string {
 	if f.IsArray && f.ArrayLen > -1 {
 		return fmt.Sprintf("%s[%d] %s", f.Type, f.ArrayLen, f.Name)
@@ -314,6 +335,8 @@ func (f *Field) String() string {
 	}
 }
 
+// MsgSpec defines the struct that contains the extracted
+// ROS Message specifications from .msg file
 type MsgSpec struct {
 	Fields    []Field
 	Constants []Constant
@@ -324,6 +347,8 @@ type MsgSpec struct {
 	Package   string
 }
 
+// SrvSpec defines the struct that contains the extracted
+// ROS Service specifications fromo .srv file
 type SrvSpec struct {
 	Package   string
 	ShortName string
@@ -334,6 +359,8 @@ type SrvSpec struct {
 	Response  *MsgSpec
 }
 
+// ActionSpec defines the struct that contains the extracted
+// ROS Action specifications from .action file
 type ActionSpec struct {
 	Package        string
 	ShortName      string
@@ -348,8 +375,10 @@ type ActionSpec struct {
 	ActionResult   *MsgSpec
 }
 
+// OptionMsgSpec defines the function type of NewMsgSpec options
 type OptionMsgSpec func(*MsgSpec) error
 
+// OptionPackageName returns a NewMsgSpec option that sets package name in MsgSpec
 func OptionPackageName(name string) func(*MsgSpec) error {
 	return func(spec *MsgSpec) error {
 		spec.Package = name
@@ -357,6 +386,7 @@ func OptionPackageName(name string) func(*MsgSpec) error {
 	}
 }
 
+// OptionShortName returns a NewMsgSpec option that sets short name in MsgSpec
 func OptionShortName(name string) func(*MsgSpec) error {
 	return func(spec *MsgSpec) error {
 		spec.ShortName = name
@@ -364,13 +394,15 @@ func OptionShortName(name string) func(*MsgSpec) error {
 	}
 }
 
+// NewMsgSpec creates a new instance of MsgSpec from the message information and options provided
+// Returns an error if any of the options return error while running
 func NewMsgSpec(fields []Field, constants []Constant, text string, fullName string, options ...OptionMsgSpec) (*MsgSpec, error) {
-	spec := &MsgSpec{}
-
-	spec.Fields = fields
-	spec.Constants = constants
-	spec.Text = text
-	spec.FullName = fullName
+	spec := &MsgSpec{
+		Fields:    fields,
+		Constants: constants,
+		Text:      text,
+		FullName:  fullName,
+	}
 
 	for _, opt := range options {
 		err := opt(spec)
@@ -381,10 +413,10 @@ func NewMsgSpec(fields []Field, constants []Constant, text string, fullName stri
 	return spec, nil
 }
 
-// Implements Stringer interface
+// String implements stringer interface
+// Returns ROS message representation of entire message from MsgSpec
 func (s *MsgSpec) String() string {
 	lines := []string{}
-
 	lines = append(lines, fmt.Sprintf("msg %s {", s.FullName))
 
 	for _, c := range s.Constants {
@@ -399,9 +431,11 @@ func (s *MsgSpec) String() string {
 	return strings.Join(lines, "\n")
 }
 
+// ComputeMD5 computes the MD5 sum of the ROS message in MsgSpec
 func (s *MsgSpec) ComputeMD5(msgContext *MsgContext) (string, error) {
 	thisPkgName := s.Package
 	var buffer bytes.Buffer
+
 	for _, c := range s.Constants {
 		buffer.WriteString(fmt.Sprintf("%v %v=%v\n", c.Type, c.Name, c.ValueText))
 	}
@@ -430,6 +464,7 @@ func (s *MsgSpec) ComputeMD5(msgContext *MsgContext) (string, error) {
 			}
 		}
 	}
+
 	data := buffer.Bytes()
 	hash := md5.New()
 	sum := hash.Sum(data)

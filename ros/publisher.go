@@ -52,7 +52,7 @@ func newDefaultPublisher(node *defaultNode,
 	pub.sessionErrorChan = make(chan error, 10)
 	pub.connectCallback = connectCallback
 	pub.disconnectCallback = disconnectCallback
-	if listener, err := net.Listen("tcp", ":0"); err != nil {
+	if listener, err := net.Listen("tcp", fmt.Sprintf("%s:0", node.listenIP)); err != nil {
 		panic(err)
 	} else {
 		pub.listener = listener

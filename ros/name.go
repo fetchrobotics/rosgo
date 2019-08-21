@@ -138,7 +138,7 @@ func (n *NameResolver) remap(name string) string {
 	key := n.resolve(name)
 	if value, ok := n.resolvedMapping[key]; ok {
 		return value
-	} else {
-		return key
 	}
+
+	return key
 }

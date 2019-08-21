@@ -1,9 +1,6 @@
-// Copyright 2018, Akio Ochiai All rights reserved
 package main
 
 import (
-	// "fmt"
-	//	"math"
 	"os"
 	"strings"
 	"testing"

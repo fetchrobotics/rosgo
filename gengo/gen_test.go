@@ -1,5 +1,6 @@
 package main
 
+// Generate messages
 //go:generate gengo msg actionlib/TestAction
 //go:generate gengo msg actionlib/TestActionFeedback
 //go:generate gengo msg actionlib/TestActionGoal
@@ -497,6 +498,7 @@ package main
 //go:generate gengo msg visualization_msgs/MarkerArray
 //go:generate gengo msg visualization_msgs/MenuEntry
 
+// Generate services
 //go:generate gengo srv std_srvs/Empty
 //go:generate gengo srv std_srvs/SetBool
 //go:generate gengo srv std_srvs/Trigger

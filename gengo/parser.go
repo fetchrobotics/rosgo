@@ -8,31 +8,45 @@ import (
 )
 
 const (
-	Sep    = "/"
-	MsgDir = "msg"
-	SrvDir = "srv"
-	ExtMsg = ".msg"
-	ExtSrv = ".msg"
+	// Sep represents a package seperator in ROS message
+	Sep = "/"
 
-	ConstChar   = "="
+	// MsgDir defines directory name inside package that contains ROS message files
+	MsgDir = "msg"
+
+	// SrvDir defines directory name inside package that contains ROS service files
+	SrvDir = "srv"
+
+	// ExtMsg defines ROS message definition file extension
+	ExtMsg = ".msg"
+
+	// ExtSrv defines ROS service definition file extension
+	ExtSrv = ".srv"
+
+	// ConstChar defines character that is used in constant fields of ROS message definitions
+	ConstChar = "="
+
+	// CommentChar defines character that is used in comments in ROS message definitions
 	CommentChar = "#"
-	IoDelim     = "---"
+
+	// IoDelim defines delimiter used to seperate Goal, Result & Feedback sections in ROS action definitons
+	IoDelim = "---"
 )
 
+// SyntaxError is an error type that is returned when parser encounter
+// invalid ROS message syntax in the ROS message definition
 type SyntaxError struct {
 	FullName string
 	Line     int
 	Message  string
 }
 
+// NewSyntaxError returns a new instance of SyntaxError
 func NewSyntaxError(fullName string, line int, message string) *SyntaxError {
-	self := &SyntaxError{}
-	self.FullName = fullName
-	self.Line = line
-	self.Message = message
-	return self
+	return &SyntaxError{fullName, line, message}
 }
 
+// Error implements the error interface and returns the underlying error message string
 func (e *SyntaxError) Error() string {
 	return fmt.Sprintf("[%s@%d] %s", e.FullName, e.Line, e.Message)
 }
@@ -99,12 +113,10 @@ func packageResourceName(name string) (string, string, error) {
 		components := strings.Split(name, Separator)
 		if len(components) == 2 {
 			return components[0], components[1], nil
-		} else {
-			return "", "", fmt.Errorf("Invalid name %s", name)
 		}
-	} else {
-		return "", name, nil
+		return "", "", fmt.Errorf("Invalid name %s", name)
 	}
+	return "", name, nil
 }
 
 func stripComment(line string) string {

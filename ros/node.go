@@ -172,7 +172,7 @@ func newDefaultNode(name string, args []string) (*defaultNode, error) {
 		}
 	}
 
-	listener, err := net.Listen("tcp", ":0")
+	listener, err := net.Listen("tcp", fmt.Sprintf("%s:0", node.listenIP))
 	if err != nil {
 		logger.Fatalf("NewDefaultNode: %v", err)
 		return nil, err
@@ -188,8 +188,7 @@ func newDefaultNode(name string, args []string) (*defaultNode, error) {
 	m := map[string]xmlrpc.Method{
 		"getBusStats":      func(callerID string) (interface{}, error) { return node.getBusStats(callerID) },
 		"getBusInfo":       func(callerID string) (interface{}, error) { return node.getBusInfo(callerID) },
-		"getMasterUri":     func(callerID string) (interface{}, error) { return node.getmasterURI(callerID) },
-		"shutdown":         func(callerID string, msg string) (interface{}, error) { return node.shutdown(callerID, msg) },
+		"getMasterURI":     func(callerID string) (interface{}, error) { return node.getMasterURI(callerID) },
 		"getPid":           func(callerID string) (interface{}, error) { return node.getPid(callerID) },
 		"getSubscriptions": func(callerID string) (interface{}, error) { return node.getSubscriptions(callerID) },
 		"getPublications":  func(callerID string) (interface{}, error) { return node.getPublications(callerID) },
@@ -201,6 +200,9 @@ func newDefaultNode(name string, args []string) (*defaultNode, error) {
 		},
 		"requestTopic": func(callerID string, topic string, protocols []interface{}) (interface{}, error) {
 			return node.requestTopic(callerID, topic, protocols)
+		},
+		"shutdown": func(callerID string, msg string) (interface{}, error) {
+			return node.shutdown(callerID, msg)
 		},
 	}
 	node.xmlrpcHandler = xmlrpc.NewHandler(m)
@@ -224,7 +226,7 @@ func (node *defaultNode) getBusInfo(callerID string) (interface{}, error) {
 	return buildRosAPIResult(APIStatusError, "Not implemeted", 0), nil
 }
 
-func (node *defaultNode) getmasterURI(callerID string) (interface{}, error) {
+func (node *defaultNode) getMasterURI(callerID string) (interface{}, error) {
 	return buildRosAPIResult(APIStatusSuccess, "Success", node.masterURI), nil
 }
 
@@ -289,8 +291,9 @@ func (node *defaultNode) publisherUpdate(callerID string, topic string, publishe
 
 func (node *defaultNode) requestTopic(callerID string, topic string, protocols []interface{}) (interface{}, error) {
 	node.logger.Debugf("Slave API requestTopic(%s, %s, ...) called.", callerID, topic)
-	node.publishersMutex.RLock()
-	defer node.publishersMutex.RUnlock()
+	var code int32
+	var message string
+	var value interface{}
 
 	pub, ok := node.publishers[topic]
 	if !ok {
@@ -316,9 +319,7 @@ func (node *defaultNode) requestTopic(callerID string, topic string, protocols [
 			break
 		}
 	}
-
-	node.logger.Debug(selectedProtocol)
-	return buildRosAPIResult(APIStatusSuccess, "Success", selectedProtocol), nil
+	return buildRosAPIResult(code, message, value), nil
 }
 
 func (node *defaultNode) NewPublisher(topic string, msgType MessageType) Publisher {

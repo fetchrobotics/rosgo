@@ -10,6 +10,7 @@ import (
 	"strings"
 )
 
+// isRosPackage checks if a given path is a ROS package or not
 func isRosPackage(dir string) bool {
 	files, err := ioutil.ReadDir(dir)
 	if err != nil {
@@ -58,6 +59,8 @@ func findAllMessages(rosPkgPaths []string) (map[string]string, error) {
 	return findPackages("msg", rosPkgPaths)
 }
 
+// findAllServices returns a path map with all ROS service definitons present in ROS package paths
+// with keys as full service name including package and values as paths to the service definitions
 func findAllServices(rosPkgPaths []string) (map[string]string, error) {
 	return findPackages("srv", rosPkgPaths)
 }
@@ -66,6 +69,8 @@ func findAllActions(rosPkgPaths []string) (map[string]string, error) {
 	return findPackages("action", rosPkgPaths)
 }
 
+// MsgContext is used to load and create message or service specification from their definitions
+// that are either passed explicitly or found in path map
 type MsgContext struct {
 	msgPathMap    map[string]string
 	srvPathMap    map[string]string
@@ -73,6 +78,10 @@ type MsgContext struct {
 	msgRegistry   map[string]*MsgSpec
 }
 
+// NewMsgContext finds message/service definitions in the provided rosPkgPaths and
+// initializes and returns new MsgContext with message and service path maps
+// message and service path maps are used to find message definitions when loading
+// a message without explicitly passing its definiton or path to its definition
 func NewMsgContext(rosPkgPaths []string) (*MsgContext, error) {
 	ctx := new(MsgContext)
 	msgs, err := findAllMessages(rosPkgPaths)
@@ -97,10 +106,14 @@ func NewMsgContext(rosPkgPaths []string) (*MsgContext, error) {
 	return ctx, nil
 }
 
+// Register adds or updates a message specification in MsgContext's registery
 func (ctx *MsgContext) Register(fullname string, spec *MsgSpec) {
 	ctx.msgRegistry[fullname] = spec
 }
 
+// LoadMsgFromString loads a ROS message definition from a string and returns MsgSpec
+// which contains extracted information from the definiton. Returns a non-nil error if
+// an invalid string is passed or if failed to parse the message definition
 func (ctx *MsgContext) LoadMsgFromString(text string, fullname string) (*MsgSpec, error) {
 	packageName, shortName, e := packageResourceName(fullname)
 	if e != nil {
@@ -139,6 +152,9 @@ func (ctx *MsgContext) LoadMsgFromString(text string, fullname string) (*MsgSpec
 	return spec, nil
 }
 
+// LoadMsgFromFile loads a ROS message definition from a file and returns MsgSpec
+// which contains extracted information from the definiton. Returns a non-nil error if
+// an invalid file path is passed or if failed to parse the message definition
 func (ctx *MsgContext) LoadMsgFromFile(filePath string, fullname string) (*MsgSpec, error) {
 	bytes, e := ioutil.ReadFile(filePath)
 	if e != nil {
@@ -148,24 +164,29 @@ func (ctx *MsgContext) LoadMsgFromFile(filePath string, fullname string) (*MsgSp
 	return ctx.LoadMsgFromString(text, fullname)
 }
 
+// LoadMsg loads a message if the message definition is known from ROS package paths that
+// was provided in the Constructor
 func (ctx *MsgContext) LoadMsg(fullname string) (*MsgSpec, error) {
 	if spec, ok := ctx.msgRegistry[fullname]; ok {
 		return spec, nil
-	} else {
-		if path, ok := ctx.msgPathMap[fullname]; ok {
-			spec, err := ctx.LoadMsgFromFile(path, fullname)
-			if err != nil {
-				return nil, err
-			} else {
-				ctx.msgRegistry[fullname] = spec
-				return spec, nil
-			}
-		} else {
-			return nil, fmt.Errorf("Message definition of `%s` is not found", fullname)
-		}
 	}
+
+	if path, ok := ctx.msgPathMap[fullname]; ok {
+		spec, err := ctx.LoadMsgFromFile(path, fullname)
+		if err != nil {
+			return nil, err
+		}
+
+		ctx.msgRegistry[fullname] = spec
+		return spec, nil
+	}
+
+	return nil, fmt.Errorf("Message definition of `%s` is not found", fullname)
 }
 
+// LoadSrvFromString loads a ROS service definition from a string and returns MsgSpec
+// which contains extracted information from the definiton. Returns a non-nil error if
+// an invalid string is passed or if failed to parse the service definition
 func (ctx *MsgContext) LoadSrvFromString(text string, fullname string) (*SrvSpec, error) {
 	packageName, shortName, err := packageResourceName(fullname)
 	if err != nil {
@@ -201,6 +222,9 @@ func (ctx *MsgContext) LoadSrvFromString(text string, fullname string) (*SrvSpec
 	return spec, nil
 }
 
+// LoadSrvFromFile loads a ROS service definition from a file and returns MsgSpec
+// which contains extracted information from the definiton. Returns a non-nil error if
+// an invalid file path is passed or if failed to parse the service definition
 func (ctx *MsgContext) LoadSrvFromFile(filePath string, fullname string) (*SrvSpec, error) {
 	bytes, e := ioutil.ReadFile(filePath)
 	if e != nil {
@@ -210,17 +234,17 @@ func (ctx *MsgContext) LoadSrvFromFile(filePath string, fullname string) (*SrvSp
 	return ctx.LoadSrvFromString(text, fullname)
 }
 
+// LoadSrv loads a service if the service definition is known from ROS package paths that
+// was provided in the Constructor
 func (ctx *MsgContext) LoadSrv(fullname string) (*SrvSpec, error) {
 	if path, ok := ctx.srvPathMap[fullname]; ok {
 		spec, err := ctx.LoadSrvFromFile(path, fullname)
 		if err != nil {
 			return nil, err
-		} else {
-			return spec, nil
 		}
-	} else {
-		return nil, fmt.Errorf("Service definition of `%s` is not found", fullname)
+		return spec, nil
 	}
+	return nil, fmt.Errorf("Service definition of `%s` is not found", fullname)
 }
 
 func (ctx *MsgContext) LoadActionFromString(text string, fullname string) (*ActionSpec, error) {
@@ -331,6 +355,7 @@ func (ctx *MsgContext) ComputeMD5Text(spec *MsgSpec) (string, error) {
 	return strings.Trim(buf.String(), "\n"), nil
 }
 
+// ComputeMsgMD5 computes the MD5 hash of a ROS message from its MsgSpec
 func (ctx *MsgContext) ComputeMsgMD5(spec *MsgSpec) (string, error) {
 	md5text, err := ctx.ComputeMD5Text(spec)
 	if err != nil {

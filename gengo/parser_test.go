@@ -1,4 +1,3 @@
-// Copyright 2018, Akio Ochiai All rights reserved
 package main
 
 import (
@@ -132,7 +131,7 @@ Bar[42] xfa
 }
 
 func TestMD5_std_msgs(t *testing.T) {
-	var std_msgs = map[string]string{
+	var msgs = map[string]string{
 		"std_msgs/Bool":                "8b94c1b53db61fb6aed406028ad6332a",
 		"std_msgs/Byte":                "ad736a2e8818154c487bb80fe42ce43b",
 		"std_msgs/ByteMultiArray":      "70ea476cbcfd65ac2f68f3cda1e891fe",
@@ -171,7 +170,7 @@ func TestMD5_std_msgs(t *testing.T) {
 	if e != nil {
 		t.Errorf("Failed to create MsgContext.")
 	} else {
-		for fullname, md5 := range std_msgs {
+		for fullname, md5 := range msgs {
 			_, shortName, _ := packageResourceName(fullname)
 
 			t.Run(shortName, func(t *testing.T) {
@@ -189,7 +188,7 @@ func TestMD5_std_msgs(t *testing.T) {
 }
 
 func TestMD5_sensor_msgs(t *testing.T) {
-	var sensor_msgs = map[string]string{
+	var msgs = map[string]string{
 		"sensor_msgs/BatteryState":       "476f837fa6771f6e16e3bf4ef96f8770",
 		"sensor_msgs/CameraInfo":         "c9a58c1b0b154e0e6da7578cb991d214",
 		"sensor_msgs/ChannelFloat32":     "3d40139cdd33dfedcb71ffeeeb42ae7f",
@@ -225,7 +224,7 @@ func TestMD5_sensor_msgs(t *testing.T) {
 		t.Errorf("Failed to create MsgContext.")
 	}
 
-	for fullname, md5 := range sensor_msgs {
+	for fullname, md5 := range msgs {
 		_, shortName, _ := packageResourceName(fullname)
 
 		t.Run(shortName, func(t *testing.T) {

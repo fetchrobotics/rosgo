@@ -11,8 +11,8 @@ import (
 )
 
 var (
-	out         = flag.String("out", "vendor", "Directory to generate files in")
-	import_path = flag.String("import_path", "", "Specify import path/prefix for nested types")
+	out        = flag.String("out", "vendor", "Directory to generate files in")
+	importPath = flag.String("import_path", "", "Specify import path/prefix for nested types")
 )
 
 func writeCode(fullname string, code string) error {
@@ -133,7 +133,7 @@ func main() {
 			os.Exit(-1)
 		}
 
-		actionCode, goalCode, feedbackCode, resultCode, goalActionCode, feedbackActionCode, resultActionCode, err := GenerateAction(context, spec)
+		actionCode, codeMap, err := GenerateAction(context, spec)
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(-1)
@@ -145,41 +145,14 @@ func main() {
 			os.Exit(-1)
 		}
 
-		err = writeCode(spec.Goal.FullName, goalCode)
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(-1)
+		for name, code := range codeMap {
+			err = writeCode(name, code)
+			if err != nil {
+				fmt.Println(err)
+				os.Exit(-1)
+			}
 		}
 
-		err = writeCode(spec.Result.FullName, resultCode)
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(-1)
-		}
-
-		err = writeCode(spec.Feedback.FullName, feedbackCode)
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(-1)
-		}
-
-		err = writeCode(spec.ActionGoal.FullName, goalActionCode)
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(-1)
-		}
-
-		err = writeCode(spec.ActionResult.FullName, resultActionCode)
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(-1)
-		}
-
-		err = writeCode(spec.ActionFeedback.FullName, feedbackActionCode)
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(-1)
-		}
 	} else {
 		fmt.Println("USAGE: gengo <MSG>")
 		os.Exit(-1)

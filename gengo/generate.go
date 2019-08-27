@@ -368,12 +368,12 @@ type MsgGen struct {
 }
 
 func (gen *MsgGen) analyzeImports() {
-	imp_path := ""
-	if len(*import_path) != 0 {
-		imp_path = *import_path + "/"
+	fullpath := ""
+	if len(*importPath) != 0 {
+		fullpath = *importPath + "/"
 	}
 
-OUTER:
+LOOP:
 	for i, field := range gen.Fields {
 		if len(field.Package) == 0 {
 			gen.BinaryRequired = true
@@ -382,11 +382,11 @@ OUTER:
 			gen.Fields[i].ZeroValue = field.Type + "{}"
 		} else {
 			for _, imp := range gen.Imports {
-				if imp == imp_path+field.Package {
-					continue OUTER
+				if imp == fullpath+field.Package {
+					continue LOOP
 				}
 			}
-			gen.Imports = append(gen.Imports, imp_path+field.Package)
+			gen.Imports = append(gen.Imports, fullpath+field.Package)
 		}
 
 		// Binary is required to read the size of array
@@ -447,42 +447,49 @@ func GenerateService(context *MsgContext, spec *SrvSpec) (string, string, string
 	return buffer.String(), reqCode, resCode, err
 }
 
-func GenerateAction(context *MsgContext, spec *ActionSpec) (string, string, string, string, string, string, string, error) {
-	goalCode, err := GenerateMessage(context, spec.Goal, false)
+type ActionCode struct {
+	goalCode string
+}
+
+func GenerateAction(context *MsgContext, spec *ActionSpec) (actionCode string, codeMap map[string]string, err error) {
+	codeMap = make(map[string]string)
+	codeMap[spec.Goal.FullName], err = GenerateMessage(context, spec.Goal, false)
 	if err != nil {
-		return "", "", "", "", "", "", "", err
+		return
 	}
-	goalActionCode, err := GenerateMessage(context, spec.ActionGoal, true)
+
+	codeMap[spec.ActionGoal.FullName], err = GenerateMessage(context, spec.ActionGoal, true)
 	if err != nil {
-		return "", "", "", "", "", "", "", err
+		return
 	}
-	resultCode, err := GenerateMessage(context, spec.Result, false)
+	codeMap[spec.Result.FullName], err = GenerateMessage(context, spec.Result, false)
 	if err != nil {
-		return "", "", "", "", "", "", "", err
+		return
 	}
-	resultActionCode, err := GenerateMessage(context, spec.ActionResult, true)
+	codeMap[spec.ActionResult.FullName], err = GenerateMessage(context, spec.ActionResult, true)
 	if err != nil {
-		return "", "", "", "", "", "", "", err
+		return
 	}
-	feedbackCode, err := GenerateMessage(context, spec.Feedback, false)
+	codeMap[spec.Feedback.FullName], err = GenerateMessage(context, spec.Feedback, false)
 	if err != nil {
-		return "", "", "", "", "", "", "", err
+		return
 	}
-	feedbackActionCode, err := GenerateMessage(context, spec.ActionFeedback, true)
+	codeMap[spec.ActionFeedback.FullName], err = GenerateMessage(context, spec.ActionFeedback, true)
 	if err != nil {
-		return "", "", "", "", "", "", "", err
+		return
 	}
 
 	tmpl, err := template.New("action").Parse(actionTemplate)
 	if err != nil {
-		return "", "", "", "", "", "", "", err
+		return
 	}
 
 	var buffer bytes.Buffer
-
 	err = tmpl.Execute(&buffer, spec)
 	if err != nil {
-		return "", "", "", "", "", "", "", err
+		return
 	}
-	return buffer.String(), goalCode, feedbackCode, resultCode, goalActionCode, feedbackActionCode, resultActionCode, err
+	actionCode = buffer.String()
+
+	return
 }

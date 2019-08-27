@@ -23,8 +23,8 @@ func isRosPackage(dir string) bool {
 	return false
 }
 
-func findAllMessages(rosPkgPaths []string) (map[string]string, error) {
-	msgs := make(map[string]string)
+func findPackages(pkgType string, rosPkgPaths []string) (map[string]string, error) {
+	pkgs := make(map[string]string)
 	for _, p := range rosPkgPaths {
 		files, err := ioutil.ReadDir(p)
 		if err != nil {
@@ -37,52 +37,33 @@ func findAllMessages(rosPkgPaths []string) (map[string]string, error) {
 			pkgPath := filepath.Join(p, f.Name())
 			if isRosPackage(pkgPath) {
 				pkgName := filepath.Base(pkgPath)
-				msgPath := filepath.Join(pkgPath, "msg")
-				msgPaths, err := filepath.Glob(msgPath + "/*.msg")
+				msgPath := filepath.Join(pkgPath, pkgType)
+				msgPaths, err := filepath.Glob(msgPath + fmt.Sprintf("/*.%s", pkgType))
 				if err != nil {
 					continue
 				}
 				for _, m := range msgPaths {
 					basename := filepath.Base(m)
-					rootname := basename[:len(basename)-4]
+					rootname := basename[:len(basename)-len(pkgType)-1]
 					fullname := pkgName + "/" + rootname
-					msgs[fullname] = m
+					pkgs[fullname] = m
 				}
 			}
 		}
 	}
-	return msgs, nil
+	return pkgs, nil
+}
+
+func findAllMessages(rosPkgPaths []string) (map[string]string, error) {
+	return findPackages("msg", rosPkgPaths)
 }
 
 func findAllServices(rosPkgPaths []string) (map[string]string, error) {
-	srvs := make(map[string]string)
-	for _, p := range rosPkgPaths {
-		files, err := ioutil.ReadDir(p)
-		if err != nil {
-			continue
-		}
-		for _, f := range files {
-			if !f.IsDir() {
-				continue
-			}
-			pkgPath := filepath.Join(p, f.Name())
-			if isRosPackage(pkgPath) {
-				pkgName := filepath.Base(pkgPath)
-				srvPath := filepath.Join(pkgPath, "srv")
-				srvPaths, err := filepath.Glob(srvPath + "/*.srv")
-				if err != nil {
-					continue
-				}
-				for _, m := range srvPaths {
-					basename := filepath.Base(m)
-					rootname := basename[:len(basename)-4]
-					fullname := pkgName + "/" + rootname
-					srvs[fullname] = m
-				}
-			}
-		}
-	}
-	return srvs, nil
+	return findPackages("srv", rosPkgPaths)
+}
+
+func findAllActions(rosPkgPaths []string) (map[string]string, error) {
+	return findPackages("action", rosPkgPaths)
 }
 
 type MsgContext struct {
@@ -105,6 +86,13 @@ func NewMsgContext(rosPkgPaths []string) (*MsgContext, error) {
 		return nil, err
 	}
 	ctx.srvPathMap = srvs
+
+	acts, err := findAllActions(rosPkgPaths)
+	if err != nil {
+		return nil, err
+	}
+	ctx.actionPathMap = acts
+
 	ctx.msgRegistry = make(map[string]*MsgSpec)
 	return ctx, nil
 }
@@ -316,7 +304,7 @@ func (ctx *MsgContext) LoadAction(fullname string) (*ActionSpec, error) {
 			return spec, nil
 		}
 	} else {
-		return nil, fmt.Errorf("Service definition of `%s` is not found", fullname)
+		return nil, fmt.Errorf("Action definition of `%s` is not found", fullname)
 	}
 }
 

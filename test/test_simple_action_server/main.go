@@ -1,7 +1,6 @@
 package main
 
-//go:generate gengo action actionlib_tutorials/Averaging /opt/ros/kinetic/share/actionlib_tutorials/action/Averaging.action
-//go:generate gengo
+//go:generate gengo action actionlib_tutorials/Averaging
 import (
 	"actionlib_tutorials"
 	"fmt"

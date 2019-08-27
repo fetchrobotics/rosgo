@@ -6,11 +6,6 @@ import (
 	"sync"
 )
 
-type serverStateMachine struct {
-	goalStatus actionlib_msgs.GoalStatus
-	mutex      sync.RWMutex
-}
-
 type Event uint8
 
 const (
@@ -39,6 +34,11 @@ func (e Event) String() string {
 	default:
 		return "UNKNOWN"
 	}
+}
+
+type serverStateMachine struct {
+	goalStatus actionlib_msgs.GoalStatus
+	mutex      sync.RWMutex
 }
 
 func newServerStateMachine(goalID actionlib_msgs.GoalID) *serverStateMachine {

@@ -1,5 +1,7 @@
 package main
 
+//go:generate gengo action actionlib_tutorials/Fibonacci
+
 import (
 	"actionlib_tutorials"
 	"fmt"

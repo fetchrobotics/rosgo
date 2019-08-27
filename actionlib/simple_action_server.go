@@ -75,7 +75,7 @@ func (s *simpleActionServer) AcceptNewGoal() (ros.Message, error) {
 
 	s.logger.Debug("Accepting a new goal")
 
-	//accept the next goal
+	// accept the next goal
 	s.currentGoal = s.nextGoal
 	s.newGoal = false
 
@@ -135,15 +135,15 @@ func (s *simpleActionServer) SetPreempted(result ros.Message, text string) error
 	return s.currentGoal.SetCancelled(result, text)
 }
 
-func (s *simpleActionServer) PublishFeedback(feedback ActionFeedback) {
+func (s *simpleActionServer) PublishFeedback(feedback ros.Message) {
 	s.goalMutex.Lock()
 	defer s.goalMutex.Unlock()
 
 	s.currentGoal.PublishFeedback(feedback)
 }
 
-func (s *simpleActionServer) GetDefaultResult() ActionResult {
-	return s.actionServer.actionResult.NewMessage().(ActionResult)
+func (s *simpleActionServer) GetDefaultResult() ros.Message {
+	return s.actionServer.actionResultType.NewMessage()
 }
 
 func (s *simpleActionServer) RegisterGoalCallback(cb interface{}) error {
@@ -185,7 +185,8 @@ func (s *simpleActionServer) internalGoalCallback(ag ActionGoal) {
 		s.nextGoal = goalHandler
 		s.newGoal = true
 		s.newGoalPreemptRequest = false
-		args := []reflect.Value{reflect.ValueOf(goalHandler.GetGoal())}
+		goal := goalHandler.GetGoal()
+		args := []reflect.Value{reflect.ValueOf(goal)}
 
 		if s.IsActive() {
 			s.preemptRequest = true

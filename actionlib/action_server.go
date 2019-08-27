@@ -67,6 +67,10 @@ func (as *defaultActionServer) init() {
 	as.goalIDGen = newGoalIDGenerator(as.node.Name())
 	as.handlers = map[string]*serverGoalHandler{}
 
+	// setup action result type so that we can create default result messages
+	res := as.actionResult.NewMessage().(ActionResult).GetResult()
+	as.actionResultType = res.Type()
+
 	// get frequency from ros params
 	as.statusFrequency = ros.NewRate(5.0)
 
@@ -134,26 +138,26 @@ func (as *defaultActionServer) PublishFeedback(status actionlib_msgs.GoalStatus,
 func (as *defaultActionServer) getStatus() *actionlib_msgs.GoalStatusArray {
 	as.handlersMutex.Lock()
 	defer as.handlersMutex.Unlock()
-	var stArr []actionlib_msgs.GoalStatus
+	var statusList []actionlib_msgs.GoalStatus
 
 	if as.node.OK() {
 		for id, gh := range as.handlers {
 			handlerTime := gh.GetHandlerDestructionTime()
-			destTime := handlerTime.Add(as.handlersTimeout)
+			destroyTime := handlerTime.Add(as.handlersTimeout)
 
-			if !handlerTime.IsZero() && destTime.Cmp(ros.Now()) <= 0 {
+			if !handlerTime.IsZero() && destroyTime.Cmp(ros.Now()) <= 0 {
 				delete(as.handlers, id)
 				continue
 			}
 
-			stArr = append(stArr, gh.GetGoalStatus())
+			statusList = append(statusList, gh.GetGoalStatus())
 		}
 	}
 
-	arr := &actionlib_msgs.GoalStatusArray{}
-	arr.Header.Stamp = ros.Now()
-	arr.StatusList = stArr
-	return arr
+	goalStatus := &actionlib_msgs.GoalStatusArray{}
+	goalStatus.Header.Stamp = ros.Now()
+	goalStatus.StatusList = statusList
+	return goalStatus
 }
 
 func (as *defaultActionServer) PublishStatus() {

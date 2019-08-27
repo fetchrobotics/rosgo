@@ -35,13 +35,13 @@ func newFibonacciServer(node ros.Node, name string) {
 	s.as.Start()
 }
 
-func (s *fibonacciServer) executeCallback(msg *actionlib_tutorials.FibonacciActionGoal) {
-	feed := actionlib_tutorials.FibonacciFeedback{}
+func (s *fibonacciServer) executeCallback(goal *actionlib_tutorials.FibonacciGoal) {
+	feed := &actionlib_tutorials.FibonacciFeedback{}
 	feed.Sequence = append(feed.Sequence, 0)
 	feed.Sequence = append(feed.Sequence, 1)
 	success := true
 
-	for i := 1; i < int(msg.Goal.Order); i++ {
+	for i := 1; i < int(goal.Order); i++ {
 		if s.as.IsPreemptRequested() {
 			success = false
 			if err := s.as.SetPreempted(nil, ""); err != nil {
@@ -53,10 +53,7 @@ func (s *fibonacciServer) executeCallback(msg *actionlib_tutorials.FibonacciActi
 		val := feed.Sequence[i] + feed.Sequence[i-1]
 		feed.Sequence = append(feed.Sequence, val)
 
-		s.as.PublishFeedback(&actionlib_tutorials.FibonacciActionFeedback{
-			Feedback: feed,
-		})
-
+		s.as.PublishFeedback(feed)
 		time.Sleep(1000 * time.Millisecond)
 	}
 

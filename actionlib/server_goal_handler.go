@@ -48,7 +48,7 @@ func (gh *serverGoalHandler) SetHandlerDestructionTime(t ros.Time) {
 
 func (gh *serverGoalHandler) SetAccepted(text string) error {
 	if gh.goal == nil {
-		return fmt.Errorf("attempt to set handler on an uninitialized handler handler")
+		return fmt.Errorf("attempt to set handler on an uninitialized handler")
 	}
 
 	if status, err := gh.sm.transition(Accept, text); err != nil {
@@ -142,21 +142,29 @@ func (gh *serverGoalHandler) SetCancelRequested() bool {
 	return true
 }
 
-func (gh *serverGoalHandler) PublishFeedback(feedback ActionFeedback) {
-	gh.as.PublishFeedback(gh.sm.getStatus(), feedback.GetFeedback())
+func (gh *serverGoalHandler) PublishFeedback(feedback ros.Message) {
+	gh.as.PublishFeedback(gh.sm.getStatus(), feedback)
 }
 
-func (gh *serverGoalHandler) GetGoal() ActionGoal {
-	return gh.goal
+func (gh *serverGoalHandler) GetGoal() ros.Message {
+	if gh.goal == nil {
+		return nil
+	}
+
+	return gh.goal.GetGoal()
 }
 
 func (gh *serverGoalHandler) GetGoalId() actionlib_msgs.GoalID {
+	if gh.goal == nil {
+		return actionlib_msgs.GoalID{}
+	}
+
 	return gh.goal.GetGoalId()
 }
 
 func (gh *serverGoalHandler) GetGoalStatus() actionlib_msgs.GoalStatus {
 	status := gh.sm.getStatus()
-	if status.Status != 0 && gh.goal.GetGoalId().Id != "" {
+	if status.Status != 0 && gh.goal != nil && gh.goal.GetGoalId().Id != "" {
 		return status
 	}
 
@@ -164,6 +172,10 @@ func (gh *serverGoalHandler) GetGoalStatus() actionlib_msgs.GoalStatus {
 }
 
 func (gh *serverGoalHandler) Equal(other ServerGoalHandler) bool {
+	if gh.goal == nil || other == nil {
+		return false
+	}
+
 	return gh.goal.GetGoalId().Id == other.GetGoalId().Id
 }
 

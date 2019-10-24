@@ -182,9 +182,17 @@ func startRemotePublisherConn(logger Logger,
 		resHeaderMap[h.key] = h.value
 		logger.Debugf("  `%s` = `%s`", h.key, h.value)
 	}
-	if resHeaderMap["type"] != msgType || resHeaderMap["md5sum"] != md5sum {
-		logger.Fatalf("Incomatible message type!")
+
+	if resHeaderMap["type"] != msgType && resHeaderMap["type"] != "*" {
+		panic(fmt.Errorf("incompatible message type: type does not match for topic %s: %s vs %s",
+			topic, msgType, resHeaderMap["type"]))
 	}
+
+	if resHeaderMap["name"] != msgType && resHeaderMap["name"] != "*" {
+		panic(fmt.Errorf("incompatible message name: name does not match for topic %s: %s vs %s",
+			topic, msgType, resHeaderMap["name"]))
+	}
+
 	logger.Debug("Start receiving messages...")
 	event := MessageEvent{ // Event struct to be sent with each message.
 		PublisherName:    resHeaderMap["callerid"],

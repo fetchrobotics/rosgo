@@ -183,14 +183,12 @@ func startRemotePublisherConn(logger Logger,
 		logger.Debugf("  `%s` = `%s`", h.key, h.value)
 	}
 
-	if resHeaderMap["type"] != msgType && resHeaderMap["type"] != "*" {
-		panic(fmt.Errorf("incompatible message type: type does not match for topic %s: %s vs %s",
-			topic, msgType, resHeaderMap["type"]))
+	if msgType != resHeaderMap["type"] && msgType != "*" {
+		panic("incompatible message type: message type mismatch")
 	}
 
-	if resHeaderMap["name"] != msgType && resHeaderMap["name"] != "*" {
-		panic(fmt.Errorf("incompatible message name: name does not match for topic %s: %s vs %s",
-			topic, msgType, resHeaderMap["name"]))
+	if md5sum != resHeaderMap["md5sum"] && md5sum != "*" {
+		panic("incompatible message type: md5sum mismatch")
 	}
 
 	logger.Debug("Start receiving messages...")

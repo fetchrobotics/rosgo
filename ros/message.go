@@ -12,7 +12,7 @@ type MessageType interface {
 }
 
 type Message interface {
-	Type() MessageType
+	GetType() MessageType
 	Serialize(buf *bytes.Buffer) error
 	Deserialize(buf *bytes.Reader) error
 }

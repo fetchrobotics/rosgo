@@ -24,9 +24,9 @@ import (
 const (
 {{- range .Constants }}
 	{{- if eq .Type "string" }}
-    {{ .GoName }} {{ .Type }} = "{{ .Value }}"
+    {{ $.ShortName }}_{{ .GoName }} {{ .Type }} = "{{ .Value }}"
 	{{- else }}
-	{{ .GoName }} {{ .Type }} = {{ .Value }}
+	{{ $.ShortName }}_{{ .GoName }} {{ .Type }} = {{ .Value }}
 	{{- end }}
 {{- end }}
 )
@@ -91,7 +91,7 @@ type {{ .ShortName }} struct {
 {{- end }}
 }
 
-func (m *{{ .ShortName }}) Type() ros.MessageType {
+func (m *{{ .ShortName }}) GetType() ros.MessageType {
 	return Msg{{ .ShortName }}
 }
 

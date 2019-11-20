@@ -139,8 +139,10 @@ func (ctx *MsgContext) LoadMsgFromString(text string, fullname string) (*MsgSpec
 			fields = append(fields, *field)
 		}
 	}
-	spec, _ := NewMsgSpec(fields, constants, text, fullname, OptionPackageName(packageName), OptionShortName(shortName))
-	var err error
+	spec, err := NewMsgSpec(fields, constants, text, fullname, OptionPackageName(packageName), OptionShortName(shortName))
+	if err != nil {
+		return nil, err
+	}
 	md5sum, err := ctx.ComputeMsgMD5(spec)
 	if err != nil {
 		return nil, err
@@ -245,11 +247,11 @@ func (ctx *MsgContext) ComputeMD5Text(spec *MsgSpec) (string, error) {
 		} else {
 			subspec, err := ctx.LoadMsg(f.Package + "/" + f.Type)
 			if err != nil {
-				return "", nil
+				return "", err
 			}
 			submd5, err := ctx.ComputeMsgMD5(subspec)
 			if err != nil {
-				return "", nil
+				return "", err
 			}
 			buf.WriteString(fmt.Sprintf("%s %s\n", submd5, f.Name))
 		}

@@ -183,10 +183,6 @@ func startRemotePublisherConn(logger Logger,
 		logger.Debugf("  `%s` = `%s`", h.key, h.value)
 	}
 
-	if msgType != resHeaderMap["type"] && msgType != "*" {
-		panic("incompatible message type: message type mismatch")
-	}
-
 	if md5sum != resHeaderMap["md5sum"] && md5sum != "*" {
 		panic("incompatible message type: md5sum mismatch")
 	}

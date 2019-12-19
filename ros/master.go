@@ -21,8 +21,7 @@ func callRosAPI(calleeURI string, method string, args ...interface{}) (interface
 		return nil, fmt.Errorf("malformed ROS API result")
 	}
 	if len(xs) != 3 {
-		err := fmt.Errorf("Malformed ROS API result. Length must be 3 but %d", len(xs))
-		return nil, err
+		return nil, fmt.Errorf("malformed ROS API result. Length must be 3 but %d", len(xs))
 	}
 	if code, ok = xs[0].(int32); !ok {
 		return nil, fmt.Errorf("status code is not int")
@@ -30,11 +29,10 @@ func callRosAPI(calleeURI string, method string, args ...interface{}) (interface
 	if message, ok = xs[1].(string); !ok {
 		return nil, fmt.Errorf("message is not string")
 	}
-	value = xs[2]
 
-	if code != APIStatusSuccess {
-		err := fmt.Errorf("ROS Master API call failed with code %d: %s", code, message)
-		return nil, err
+	value = xs[2]
+	if code != successStatus {
+		return nil, fmt.Errorf("ROS Master API call failed with code %d: %s", code, message)
 	}
 	return value, nil
 }

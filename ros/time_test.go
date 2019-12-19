@@ -59,3 +59,24 @@ func TestTimeDiff(t *testing.T) {
 		t.Error(d.NSec)
 	}
 }
+
+func TestTimeCmp(t *testing.T) {
+	var t1, t2 Time
+	t1.FromNSec(1300000000)
+	t2.FromNSec(500000000)
+
+	c := t1.Cmp(t2)
+	if c != 1 {
+		t.Errorf("Expected 1 got %v", c)
+	}
+
+	c = t2.Cmp(t1)
+	if c != -1 {
+		t.Errorf("Expected -1 got %v", c)
+	}
+
+	c = t2.Cmp(t2)
+	if c != 0 {
+		t.Errorf("Expected 1 got %v", c)
+	}
+}

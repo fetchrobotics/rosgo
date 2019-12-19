@@ -32,17 +32,16 @@ type defaultSubscriber struct {
 }
 
 func newDefaultSubscriber(topic string, msgType MessageType, callback interface{}) *defaultSubscriber {
-	sub := new(defaultSubscriber)
-	sub.topic = topic
-	sub.msgType = msgType
-	sub.msgChan = make(chan messageEvent, 10)
-	sub.pubListChan = make(chan []string, 10)
-	sub.addCallbackChan = make(chan interface{}, 10)
-	sub.shutdownChan = make(chan struct{}, 10)
-	sub.disconnectedChan = make(chan string, 10)
-	sub.connections = make(map[string]chan struct{})
-	sub.callbacks = []interface{}{callback}
-	return sub
+	return &defaultSubscriber{
+		topic:            topic,
+		msgType:          msgType,
+		msgChan:          make(chan messageEvent, 10),
+		pubListChan:      make(chan []string, 10),
+		addCallbackChan:  make(chan interface{}, 10),
+		shutdownChan:     make(chan struct{}, 10),
+		disconnectedChan: make(chan string, 10),
+		connections:      make(map[string]chan struct{}),
+		callbacks:        []interface{}{callback}}
 }
 
 func (sub *defaultSubscriber) start(wg *sync.WaitGroup, nodeID string, nodeURI string, masterURI string, jobChan chan func(), logger Logger) {
@@ -104,7 +103,7 @@ func (sub *defaultSubscriber) start(wg *sync.WaitGroup, nodeID string, nodeURI s
 			sub.callbacks = append(sub.callbacks, callback)
 
 		case msgEvent := <-sub.msgChan:
-			// Pop received message then bind callbacks and enqueue to the job channle.
+			// Pop received message then bind callbacks and enqueue to the job channel.
 			logger.Debug("Receive msgChan")
 			callbacks := make([]interface{}, len(sub.callbacks))
 			copy(callbacks, sub.callbacks)
@@ -133,7 +132,6 @@ func (sub *defaultSubscriber) start(wg *sync.WaitGroup, nodeID string, nodeURI s
 			// Shutdown subscription goroutine
 			logger.Debug("Receive shutdownChan")
 			for _, closeChan := range sub.connections {
-				closeChan <- struct{}{}
 				close(closeChan)
 			}
 			_, err := callRosAPI(masterURI, "unregisterSubscriber", nodeID, sub.topic, nodeURI)
@@ -153,14 +151,16 @@ func startRemotePublisherConn(logger Logger,
 	disconnectedChan chan string) {
 	logger.Debug("startRemotePublisherConn()")
 
-	defer func() {
-		logger.Debug("startRemotePublisherConn() exit")
-	}()
-
 	conn, err := net.Dial("tcp", pubURI)
 	if err != nil {
 		logger.Fatalf("Failed to connect %s!", pubURI)
 	}
+	defer func() {
+		if err := conn.Close(); err != nil {
+			logger.Errorf("Error closing connection: %v", err)
+		}
+		logger.Debug("startRemotePublisherConn() exit")
+	}()
 
 	// 1. Write connection header
 	var headers []header
@@ -177,7 +177,7 @@ func startRemotePublisherConn(logger Logger,
 		logger.Fatal("Failed to write connection header.")
 	}
 
-	// 2. Read reponse header
+	// 2. Read response header
 	var resHeaders []header
 	resHeaders, err = readConnectionHeader(conn)
 	if err != nil {
@@ -233,7 +233,6 @@ func startRemotePublisherConn(logger Logger,
 				buffer = make([]byte, int(msgSize))
 				readingSize = false
 			} else {
-				//logger.Debug("Reading message body...")
 				_, err = io.ReadFull(conn, buffer)
 				if err != nil {
 					if err == io.EOF {

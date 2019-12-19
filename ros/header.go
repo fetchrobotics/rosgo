@@ -1,4 +1,3 @@
-// Connection header
 package ros
 
 import (
@@ -16,8 +15,6 @@ type header struct {
 type connHeader struct {
 	headers map[string]string
 }
-
-const BufferSize = 1024
 
 func readConnectionHeader(r io.Reader) ([]header, error) {
 	buf := make([]byte, 4)
@@ -44,7 +41,7 @@ func readConnectionHeader(r io.Reader) ([]header, error) {
 		if done == headerSize {
 			break
 		} else if done > headerSize {
-			return nil, fmt.Errorf("Header length overrrun")
+			return nil, fmt.Errorf("header length overrun")
 		}
 		var size uint32
 		err := binary.Read(bufReader, binary.LittleEndian, &size)
@@ -62,7 +59,6 @@ func readConnectionHeader(r io.Reader) ([]header, error) {
 }
 
 func writeConnectionHeader(headers []header, w io.Writer) error {
-	//var buf bytes.Buffer
 	var headerSize int
 	var sizeList []int
 	for _, h := range headers {

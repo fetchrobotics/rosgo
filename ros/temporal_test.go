@@ -20,6 +20,18 @@ func TestNormalizeTemporal(t *testing.T) {
 	if sec != 0 || nsec != 999999999 {
 		t.Error(sec, nsec)
 	}
+
+	t1 := temporal{1, 2}
+	t1.Normalize()
+	if t1.Sec != 1 || t1.NSec != 2 {
+		t.Error(t1.Sec, t1.NSec)
+	}
+
+	t2 := temporal{1, 2000000001}
+	t2.Normalize()
+	if t2.Sec != 3 || t2.NSec != 1 {
+		t.Error(t2.Sec, t2.NSec)
+	}
 }
 
 func TestTemporalIsZero(t *testing.T) {

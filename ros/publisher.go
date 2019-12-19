@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"sync"
 	"time"
@@ -27,7 +28,7 @@ type defaultPublisher struct {
 	msgType            MessageType
 	msgChan            chan []byte
 	shutdownChan       chan struct{}
-	sesssionIDCount    int
+	sessionIDCount     int
 	sessions           map[int]*remoteSubscriberSession
 	sessionChan        chan *remoteSubscriberSession
 	sessionErrorChan   chan error
@@ -37,21 +38,22 @@ type defaultPublisher struct {
 	disconnectCallback func(SingleSubscriberPublisher)
 }
 
-func newDefaultPublisher(node *defaultNode,
-	topic string, msgType MessageType,
+func newDefaultPublisher(node *defaultNode, topic string, msgType MessageType,
 	connectCallback, disconnectCallback func(SingleSubscriberPublisher)) *defaultPublisher {
-	pub := new(defaultPublisher)
-	pub.node = node
-	pub.topic = topic
-	pub.msgType = msgType
-	pub.shutdownChan = make(chan struct{}, 10)
-	pub.sessions = make(map[int]*remoteSubscriberSession)
-	pub.msgChan = make(chan []byte, 10)
-	pub.listenerErrorChan = make(chan error, 10)
-	pub.sessionChan = make(chan *remoteSubscriberSession, 10)
-	pub.sessionErrorChan = make(chan error, 10)
-	pub.connectCallback = connectCallback
-	pub.disconnectCallback = disconnectCallback
+
+	pub := &defaultPublisher{
+		node:               node,
+		topic:              topic,
+		msgType:            msgType,
+		shutdownChan:       make(chan struct{}, 10),
+		sessions:           make(map[int]*remoteSubscriberSession),
+		msgChan:            make(chan []byte, 10),
+		listenerErrorChan:  make(chan error, 10),
+		sessionChan:        make(chan *remoteSubscriberSession, 10),
+		sessionErrorChan:   make(chan error, 10),
+		connectCallback:    connectCallback,
+		disconnectCallback: disconnectCallback}
+
 	if listener, err := net.Listen("tcp", fmt.Sprintf("%s:0", node.listenIP)); err != nil {
 		panic(err)
 	} else {
@@ -91,8 +93,10 @@ func (pub *defaultPublisher) start(wg *sync.WaitGroup) {
 			go s.start()
 
 		case err := <-pub.sessionErrorChan:
-			logger.Error(err)
 			if sessionError, ok := err.(*remoteSubscriberSessionError); ok {
+				if sessionError.err != nil {
+					logger.Error(err)
+				}
 				id := sessionError.session.id
 				delete(pub.sessions, id)
 			}
@@ -134,8 +138,8 @@ func (pub *defaultPublisher) listenRemoteSubscriber() {
 		}
 
 		logger.Debugf("Connected %s", conn.RemoteAddr().String())
-		id := pub.sesssionIDCount
-		pub.sesssionIDCount++
+		id := pub.sessionIDCount
+		pub.sessionIDCount++
 		session := newRemoteSubscriberSession(pub, id, conn)
 		pub.sessionChan <- session
 	}
@@ -251,8 +255,7 @@ func (session *remoteSubscriberSession) start() {
 				session.errorChan <- &remoteSubscriberSessionError{session, e}
 			}
 		} else {
-			e := fmt.Errorf("Normal exit")
-			session.errorChan <- &remoteSubscriberSessionError{session, e}
+			session.errorChan <- &remoteSubscriberSessionError{session, nil}
 		}
 	}()
 	// 1. Read connection header
@@ -282,7 +285,7 @@ func (session *remoteSubscriberSession) start() {
 		go session.connectCallback(ssp)
 	}
 
-	// 2. Return reponse header
+	// 2. Return response header
 	var resHeaders []header
 	resHeaders = append(resHeaders, header{"message_definition", session.typeText})
 	resHeaders = append(resHeaders, header{"callerid", session.nodeID})
@@ -298,6 +301,12 @@ func (session *remoteSubscriberSession) start() {
 	if err != nil {
 		panic(errors.New("failed to write response header"))
 	}
+
+	// Ticker to periodically check if the
+	// subscriber is still connected
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+	one := make([]byte, 1)
 
 	// 3. Start sending message
 	logger.Debug("Start sending messages...")
@@ -317,6 +326,13 @@ func (session *remoteSubscriberSession) start() {
 			logger.Debug("Receive quitChan")
 			return
 
+		case <-ticker.C:
+			session.conn.SetReadDeadline(time.Now().Add(10 * time.Millisecond))
+			if _, err := session.conn.Read(one); err == io.EOF {
+				logger.Debug("Subscriber disconnected")
+				return
+			}
+
 		case msg := <-queue:
 			logger.Debug("writing")
 			logger.Debug(hex.EncodeToString(msg))
@@ -331,7 +347,6 @@ func (session *remoteSubscriberSession) start() {
 					panic(err)
 				}
 			}
-			logger.Debug(len(msg))
 			session.conn.SetDeadline(time.Now().Add(10 * time.Millisecond))
 			if _, err := session.conn.Write(msg); err != nil {
 				if neterr, ok := err.(net.Error); ok && neterr.Timeout() {

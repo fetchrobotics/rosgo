@@ -1,4 +1,3 @@
-// Simple XMLRPC client/server for go
 package xmlrpc
 
 import (
@@ -7,10 +6,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
-
-	//	"io"
 	"net/http"
-	//	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -68,9 +64,9 @@ func emitValue(buf *bytes.Buffer, value interface{}) error {
 			for i := 0; i < val.Len(); i++ {
 				buf.WriteString("<value>")
 				v := val.Index(i)
-				e := emitValue(buf, v.Interface())
-				if e != nil {
-					return e
+				err := emitValue(buf, v.Interface())
+				if err != nil {
+					return err
 				}
 				buf.WriteString("</value>")
 			}
@@ -87,9 +83,9 @@ func emitValue(buf *bytes.Buffer, value interface{}) error {
 				buf.WriteString(xmlEscape(key.String()))
 				buf.WriteString("</name><value>")
 				v := val.MapIndex(key)
-				e := emitValue(buf, v.Interface())
-				if e != nil {
-					return e
+				err := emitValue(buf, v.Interface())
+				if err != nil {
+					return err
 				}
 				buf.WriteString("</value></member>")
 			}
@@ -113,9 +109,9 @@ func emitRequest(buf *bytes.Buffer, method string, args ...interface{}) error {
 	buf.WriteString("</methodName><params>")
 	for _, arg := range args {
 		buf.WriteString("<param><value>")
-		e := emitValue(buf, arg)
-		if e != nil {
-			return e
+		err := emitValue(buf, arg)
+		if err != nil {
+			return err
 		}
 		buf.WriteString("</value></param>")
 	}
@@ -126,9 +122,9 @@ func emitRequest(buf *bytes.Buffer, method string, args ...interface{}) error {
 func emitResponse(buf *bytes.Buffer, value interface{}) error {
 	buf.WriteString(xml.Header)
 	buf.WriteString("<methodResponse><params><param><value>")
-	e := emitValue(buf, value)
-	if e != nil {
-		return e
+	err := emitValue(buf, value)
+	if err != nil {
+		return err
 	}
 	buf.WriteString("</value></param></params></methodResponse>")
 	return nil
@@ -140,9 +136,9 @@ func emitFault(buf *bytes.Buffer, code int, message string) error {
 	fault := make(map[string]interface{})
 	fault["faultCode"] = code
 	fault["faultString"] = message
-	e := emitValue(buf, fault)
-	if e != nil {
-		return e
+	err := emitValue(buf, fault)
+	if err != nil {
+		return err
 	}
 	buf.WriteString("</value></fault></methodResponse>")
 	return nil
@@ -150,22 +146,21 @@ func emitFault(buf *bytes.Buffer, code int, message string) error {
 
 func nextTag(d *xml.Decoder) (xml.StartElement, error) {
 	for {
-		token, e := d.Token()
-		if e != nil {
-			return xml.StartElement{}, e
+		token, err := d.Token()
+		if err != nil {
+			return xml.StartElement{}, err
 		}
 		elem, ok := token.(xml.StartElement)
 		if ok {
 			return elem, nil
 		}
 	}
-	panic("not reached")
 }
 
 func expectNextTag(d *xml.Decoder, name string) (xml.StartElement, error) {
-	tag, e := nextTag(d)
-	if e != nil {
-		return xml.StartElement{}, e
+	tag, err := nextTag(d)
+	if err != nil {
+		return xml.StartElement{}, err
 	}
 	if tag.Name.Local == name {
 		return tag, nil
@@ -176,28 +171,28 @@ func expectNextTag(d *xml.Decoder, name string) (xml.StartElement, error) {
 // Parse a value after the <value> tag has been read.  On (non-error)
 // return, the </value> closing tag will have been read.
 func parseValue(d *xml.Decoder) (interface{}, error) {
-	token, e := d.Token()
-	//	t, e := nextTag(d)
-	if e != nil {
-		return nil, e
+	token, err := d.Token()
+	//	t, err := nextTag(d)
+	if err != nil {
+		return nil, err
 	}
 
 	switch t := token.(type) {
 	case xml.StartElement:
 		switch t.Name.Local {
 		case "boolean":
-			token, e := d.Token()
-			if e != nil {
-				return nil, e
+			token, err := d.Token()
+			if err != nil {
+				return nil, err
 			}
 			data, ok := token.(xml.CharData)
 			if !ok {
 				return nil, errors.New("boolean: Not a CharData")
 			}
 			var i int64
-			i, e = strconv.ParseInt(string(data), 10, 4)
-			if e != nil {
-				return nil, e
+			i, err = strconv.ParseInt(string(data), 10, 4)
+			if err != nil {
+				return nil, err
 			}
 			switch i {
 			case 0:
@@ -212,43 +207,43 @@ func parseValue(d *xml.Decoder) (interface{}, error) {
 				return nil, errors.New("Parse error")
 			}
 		case "i4", "int":
-			token, e := d.Token()
-			if e != nil {
-				return nil, e
+			token, err := d.Token()
+			if err != nil {
+				return nil, err
 			}
 			data, ok := token.(xml.CharData)
 			if !ok {
 				return nil, errors.New("int: Not a CharData")
 			}
 			var i int64
-			i, e = strconv.ParseInt(string(data), 0, 32)
-			if e != nil {
-				return nil, e
+			i, err = strconv.ParseInt(string(data), 0, 32)
+			if err != nil {
+				return nil, err
 			}
 			d.Skip() // </i4> or </int>
 			d.Skip() // </value>
 			return int32(i), nil
 		case "double":
-			token, e := d.Token()
-			if e != nil {
-				return nil, e
+			token, err := d.Token()
+			if err != nil {
+				return nil, err
 			}
 			data, ok := token.(xml.CharData)
 			if !ok {
 				return nil, errors.New("double: Not a CharData")
 			}
 			var f float64
-			f, e = strconv.ParseFloat(string(data), 64)
-			if e != nil {
-				return nil, e
+			f, err = strconv.ParseFloat(string(data), 64)
+			if err != nil {
+				return nil, err
 			}
 			d.Skip() // </double>
 			d.Skip() // </value>
 			return f, nil
 		case "string":
-			token, e := d.Token()
-			if e != nil {
-				return nil, e
+			token, err := d.Token()
+			if err != nil {
+				return nil, err
 			}
 			data, ok := token.(xml.CharData)
 			if ok {
@@ -256,54 +251,52 @@ func parseValue(d *xml.Decoder) (interface{}, error) {
 				d.Skip() // </string>
 				d.Skip() // </value>
 				return s, nil
-			} else {
-				var end xml.EndElement
-				end, ok = token.(xml.EndElement)
-				if ok && end.Name.Local == "string" {
-					d.Skip() // </value>
-					return "", nil
-				} else {
-					return nil, errors.New("string: parse error")
-				}
 			}
+			var end xml.EndElement
+			end, ok = token.(xml.EndElement)
+			if ok && end.Name.Local == "string" {
+				d.Skip() // </value>
+				return "", nil
+			}
+			return nil, errors.New("string: parse error")
 		case "dateTime.iso8601":
 			return nil, errors.New("Not supported1")
 		case "base64":
-			token, e := d.Token()
-			if e != nil {
-				return nil, e
+			token, err := d.Token()
+			if err != nil {
+				return nil, err
 			}
 			data, ok := token.(xml.CharData)
 			if !ok {
 				return nil, errors.New("base64: Not a CharData")
 			}
 			var bs []byte
-			bs, e = base64.StdEncoding.DecodeString(string(data))
-			if e != nil {
-				return nil, e
+			bs, err = base64.StdEncoding.DecodeString(string(data))
+			if err != nil {
+				return nil, err
 			}
 			d.Skip() // </base64>
 			d.Skip() // </value>
 			return bs, nil
 		case "array":
-			_, e := expectNextTag(d, "data")
-			if e != nil {
-				return nil, e
+			_, err := expectNextTag(d, "data")
+			if err != nil {
+				return nil, err
 			}
 			var a []interface{}
 			for {
-				t, e := d.Token()
-				if e != nil {
-					return nil, e
+				t, err := d.Token()
+				if err != nil {
+					return nil, err
 				}
 				switch t.(type) {
 				case xml.StartElement:
 					elem, _ := t.(xml.StartElement)
 					if elem.Name.Local == "value" {
 						var val interface{}
-						val, e = parseValue(d)
-						if e != nil {
-							return nil, e
+						val, err = parseValue(d)
+						if err != nil {
+							return nil, err
 						}
 						a = append(a, val)
 					}
@@ -315,15 +308,14 @@ func parseValue(d *xml.Decoder) (interface{}, error) {
 					}
 				}
 			}
-			return nil, errors.New("Not reached")
 		case "struct":
 			m := make(map[string]interface{})
 			var name string
 			var value interface{}
 			for {
-				t, e := d.Token()
-				if e != nil {
-					return nil, e
+				t, err := d.Token()
+				if err != nil {
+					return nil, err
 				}
 				switch t.(type) {
 				case xml.StartElement:
@@ -331,9 +323,9 @@ func parseValue(d *xml.Decoder) (interface{}, error) {
 					switch elem.Name.Local {
 					case "member":
 					case "name":
-						t, e = d.Token()
-						if e != nil {
-							return nil, e
+						t, err = d.Token()
+						if err != nil {
+							return nil, err
 						}
 						data, ok := t.(xml.CharData)
 						if ok {
@@ -342,9 +334,9 @@ func parseValue(d *xml.Decoder) (interface{}, error) {
 							return nil, errors.New("")
 						}
 					case "value":
-						value, e = parseValue(d)
-						if e != nil {
-							return nil, e
+						value, err = parseValue(d)
+						if err != nil {
+							return nil, err
 						}
 					}
 				case xml.EndElement:
@@ -358,7 +350,6 @@ func parseValue(d *xml.Decoder) (interface{}, error) {
 					}
 				}
 			}
-			return nil, errors.New("Not reached")
 		default:
 			return nil, errors.New("Not supported: t.Name.Local = " + t.Name.Local)
 		}
@@ -370,9 +361,8 @@ func parseValue(d *xml.Decoder) (interface{}, error) {
 		if stripped != "" {
 			d.Skip() // </value>
 			return string(copy), nil
-		} else {
-			return parseValue(d)
 		}
+		return parseValue(d)
 	case xml.EndElement:
 		return "", nil
 	}
@@ -380,38 +370,39 @@ func parseValue(d *xml.Decoder) (interface{}, error) {
 	return nil, errors.New("Invalid data type")
 }
 
-func parseRequest(d *xml.Decoder) (name string, args []interface{}, e error) {
-	_, e = expectNextTag(d, "methodCall")
-	if e != nil {
+func parseRequest(d *xml.Decoder) (name string, args []interface{}, err error) {
+	_, err = expectNextTag(d, "methodCall")
+	if err != nil {
 		return
 	}
-	_, e = expectNextTag(d, "methodName")
-	if e != nil {
+	_, err = expectNextTag(d, "methodName")
+	if err != nil {
 		return
 	}
 	var t xml.Token
-	t, e = d.Token()
-	if e != nil {
+	t, err = d.Token()
+	if err != nil {
 		return
 	}
 	data, ok := t.(xml.CharData)
 	if !ok {
-		e = errors.New("Invalid methodName")
+		err = errors.New("Invalid methodName")
+		return
 	}
 	name = string(data)
-	_, e = expectNextTag(d, "params")
-	if e != nil {
+	_, err = expectNextTag(d, "params")
+	if err != nil {
 		return
 	}
 	for {
-		t, e = d.Token()
+		t, err = d.Token()
 		switch t.(type) {
 		case xml.StartElement:
 			elem, _ := t.(xml.StartElement)
 			if elem.Name.Local == "value" {
 				var x interface{}
-				x, e = parseValue(d)
-				if e != nil {
+				x, err = parseValue(d)
+				if err != nil {
 					return
 				}
 				args = append(args, x)
@@ -424,32 +415,30 @@ func parseRequest(d *xml.Decoder) (name string, args []interface{}, e error) {
 			}
 		}
 	}
-	e = errors.New("Missing end element.")
-	return
 }
 
-func parseResponse(d *xml.Decoder) (ok bool, result interface{}, e error) {
-	_, e = expectNextTag(d, "methodResponse")
-	if e != nil {
+func parseResponse(d *xml.Decoder) (ok bool, result interface{}, err error) {
+	_, err = expectNextTag(d, "methodResponse")
+	if err != nil {
 		return
 	}
 	var se xml.StartElement
-	se, e = nextTag(d)
-	if e != nil {
+	se, err = nextTag(d)
+	if err != nil {
 		return
 	}
 	switch se.Name.Local {
 	case "params":
-		_, e = expectNextTag(d, "param")
-		if e != nil {
+		_, err = expectNextTag(d, "param")
+		if err != nil {
 			return
 		}
-		_, e = expectNextTag(d, "value")
-		if e != nil {
+		_, err = expectNextTag(d, "value")
+		if err != nil {
 			return
 		}
-		result, e = parseValue(d)
-		if e != nil {
+		result, err = parseValue(d)
+		if err != nil {
 			return
 		}
 		ok = true
@@ -458,12 +447,12 @@ func parseResponse(d *xml.Decoder) (ok bool, result interface{}, e error) {
 		d.Skip()
 		return
 	case "fault":
-		_, e = expectNextTag(d, "value")
-		if e != nil {
+		_, err = expectNextTag(d, "value")
+		if err != nil {
 			return
 		}
-		result, e = parseValue(d)
-		if e != nil {
+		result, err = parseValue(d)
+		if err != nil {
 			return
 		}
 		ok = false
@@ -471,89 +460,84 @@ func parseResponse(d *xml.Decoder) (ok bool, result interface{}, e error) {
 		d.Skip()
 		return
 	}
-	e = errors.New("Missing end element.")
 	return
 }
 
 // Call a XMLRPC API in a remote host.
-// Args:
-//   url string: URL of the remote host
-func Call(url string, method string, args ...interface{}) (res interface{}, e error) {
+func Call(url string, method string, args ...interface{}) (res interface{}, err error) {
 	var buffer bytes.Buffer
-	e = emitRequest(&buffer, method, args...)
-	if e != nil {
-		e = fmt.Errorf("Building request failed for %v", e)
+	err = emitRequest(&buffer, method, args...)
+	if err != nil {
+		err = fmt.Errorf("Building request failed for %v", err)
 		return
 	}
 	var r *http.Response
-	r, e = http.Post(url, "text/xml", &buffer)
-	if e != nil {
-		e = fmt.Errorf("Sending request failed for %v", e)
+	r, err = http.Post(url, "text/xml", &buffer)
+	if err != nil {
+		err = fmt.Errorf("Sending request failed for %v", err)
 		return
 	}
 	defer r.Body.Close()
 	if r.StatusCode != http.StatusOK {
-		e = fmt.Errorf("HTTP failed with code %v", r.Status)
+		err = fmt.Errorf("HTTP failed with code %v", r.Status)
 		return
 	}
 
-	// bodyReader := io.TeeReader(r.Body, os.Stdout)
-	// decoder := xml.NewDecoder(bodyReader)
 	decoder := xml.NewDecoder(r.Body)
-	ok, result, e := parseResponse(decoder)
-	if e != nil {
-		e = fmt.Errorf("Parsing response failed for %v", e)
+	ok, result, err := parseResponse(decoder)
+	if err != nil {
+		err = fmt.Errorf("Parsing response failed for %v", err)
 		return
 	}
 	if ok {
 		res = result
 		return
-	} else {
-		var m map[string]interface{}
-		m, ok = result.(map[string]interface{})
+	}
+	var m map[string]interface{}
+	m, ok = result.(map[string]interface{})
+	if ok {
+		var c int32
+		c, ok = m["faultCode"].(int32)
 		if ok {
-			var c int32
-			c, ok = m["faultCode"].(int32)
+			var s string
+			s, ok = m["faultString"].(string)
 			if ok {
-				var s string
-				s, ok = m["faultString"].(string)
-				if ok {
-					e = fmt.Errorf("XMLRPC Fault: code=%v string=%v", c, s)
-					return
-				}
+				err = fmt.Errorf("XMLRPC Fault: code=%v string=%v", c, s)
+				return
 			}
 		}
-		e = errors.New("Malformed XMLRPC Fault Response")
-		return
 	}
-	panic("Not reached")
+	err = errors.New("Malformed XMLRPC Fault Response")
+	return
 }
 
-//type Method func (args ...interface{}) (interface{}, error)
+//Method defines xmlrpc method func (args ...interface{}) (interface{}, error)
 type Method interface{}
 
-//
+// Handler defines xmlprc handler that manages mapping of
+// various rpc handlers and manages a HTTP server that calls
+// relevant method based on the rpc name.
 type Handler struct {
 	mapping map[string]Method
 	wait    sync.WaitGroup
 }
 
-//
+// NewHandler creates and returns a new instance of Handler.
 func NewHandler(mapping map[string]Method) *Handler {
 	handler := new(Handler)
 	handler.mapping = mapping
 	return handler
 }
 
-//
-func (self *Handler) WaitForShutdown() {
-	self.wait.Wait()
+// WaitForShutdown waits for handler http server to shutdown.
+func (h *Handler) WaitForShutdown() {
+	h.wait.Wait()
 }
 
-//
-func (self *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	self.wait.Add(1)
-	defer self.wait.Done()
+// ServeHTTP starts serving a new HTTP server that will receive and handle RPC calls.
+func (h *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	h.wait.Add(1)
+	defer h.wait.Done()
 
 	decoder := xml.NewDecoder(req.Body)
 	var buffer bytes.Buffer
@@ -565,7 +549,7 @@ func (self *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	method, ok := self.mapping[name]
+	method, ok := h.mapping[name]
 	if !ok {
 		err = emitFault(&buffer, 1, fmt.Sprintf("No method named '%v'.", name))
 		_, err = buffer.WriteTo(w)
@@ -602,5 +586,6 @@ func (self *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	w.Header().Set("Content-Length", strconv.Itoa(buffer.Len()))
 	_, err = buffer.WriteTo(w)
+
 	w.(http.Flusher).Flush()
 }

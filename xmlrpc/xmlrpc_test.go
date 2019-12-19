@@ -668,7 +668,6 @@ func TestServer(t *testing.T) {
 	listener, err := net.Listen("tcp", ":19937")
 	if err != nil {
 		panic(err)
-		return
 	}
 	d := myDispatcher{2}
 	m := map[string]Method{"addTwoInts": d.addTwoInts}

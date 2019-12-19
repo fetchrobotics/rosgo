@@ -45,7 +45,7 @@ func newServerStateMachine(goalID actionlib_msgs.GoalID) *serverStateMachine {
 	return &serverStateMachine{
 		goalStatus: actionlib_msgs.GoalStatus{
 			GoalId: goalID,
-			Status: actionlib_msgs.PENDING,
+			Status: actionlib_msgs.GoalStatus_PENDING,
 		},
 	}
 }
@@ -57,80 +57,80 @@ func (sm *serverStateMachine) transition(event Event, text string) (actionlib_ms
 	nextState := sm.goalStatus.Status
 
 	switch sm.goalStatus.Status {
-	case actionlib_msgs.PENDING:
+	case actionlib_msgs.GoalStatus_PENDING:
 		switch event {
 		case Reject:
-			nextState = actionlib_msgs.REJECTED
+			nextState = actionlib_msgs.GoalStatus_REJECTED
 			break
 		case CancelRequest:
-			nextState = actionlib_msgs.RECALLING
+			nextState = actionlib_msgs.GoalStatus_RECALLING
 			break
 		case Cancel:
-			nextState = actionlib_msgs.RECALLED
+			nextState = actionlib_msgs.GoalStatus_RECALLED
 			break
 		case Accept:
-			nextState = actionlib_msgs.ACTIVE
+			nextState = actionlib_msgs.GoalStatus_ACTIVE
 			break
 		default:
 			return sm.goalStatus, fmt.Errorf("invalid transition Event")
 		}
 
-	case actionlib_msgs.RECALLING:
+	case actionlib_msgs.GoalStatus_RECALLING:
 		switch event {
 		case Reject:
-			nextState = actionlib_msgs.REJECTED
+			nextState = actionlib_msgs.GoalStatus_REJECTED
 			break
 		case Cancel:
-			nextState = actionlib_msgs.RECALLED
+			nextState = actionlib_msgs.GoalStatus_RECALLED
 			break
 		case Accept:
-			nextState = actionlib_msgs.PREEMPTING
+			nextState = actionlib_msgs.GoalStatus_PREEMPTING
 			break
 		default:
 			return sm.goalStatus, fmt.Errorf("invalid transition Event")
 		}
 
-	case actionlib_msgs.ACTIVE:
+	case actionlib_msgs.GoalStatus_ACTIVE:
 		switch event {
 		case Succeed:
-			nextState = actionlib_msgs.SUCCEEDED
+			nextState = actionlib_msgs.GoalStatus_SUCCEEDED
 			break
 		case CancelRequest:
-			nextState = actionlib_msgs.PREEMPTING
+			nextState = actionlib_msgs.GoalStatus_PREEMPTING
 			break
 		case Cancel:
-			nextState = actionlib_msgs.PREEMPTED
+			nextState = actionlib_msgs.GoalStatus_PREEMPTED
 			break
 		case Abort:
-			nextState = actionlib_msgs.ABORTED
+			nextState = actionlib_msgs.GoalStatus_ABORTED
 			break
 		default:
 			return sm.goalStatus, fmt.Errorf("invalid transition Event")
 		}
 
-	case actionlib_msgs.PREEMPTING:
+	case actionlib_msgs.GoalStatus_PREEMPTING:
 		switch event {
 		case Succeed:
-			nextState = actionlib_msgs.SUCCEEDED
+			nextState = actionlib_msgs.GoalStatus_SUCCEEDED
 			break
 		case Cancel:
-			nextState = actionlib_msgs.PREEMPTED
+			nextState = actionlib_msgs.GoalStatus_PREEMPTED
 			break
 		case Abort:
-			nextState = actionlib_msgs.ABORTED
+			nextState = actionlib_msgs.GoalStatus_ABORTED
 			break
 		default:
 			return sm.goalStatus, fmt.Errorf("invalid transition Event")
 		}
-	case actionlib_msgs.REJECTED:
+	case actionlib_msgs.GoalStatus_REJECTED:
 		break
-	case actionlib_msgs.RECALLED:
+	case actionlib_msgs.GoalStatus_RECALLED:
 		break
-	case actionlib_msgs.SUCCEEDED:
+	case actionlib_msgs.GoalStatus_SUCCEEDED:
 		break
-	case actionlib_msgs.PREEMPTED:
+	case actionlib_msgs.GoalStatus_PREEMPTED:
 		break
-	case actionlib_msgs.ABORTED:
+	case actionlib_msgs.GoalStatus_ABORTED:
 		break
 	default:
 		return sm.goalStatus, fmt.Errorf("invalid state")

@@ -52,7 +52,7 @@ func (gh *clientGoalHandler) GetCommState() (CommState, error) {
 
 func (gh *clientGoalHandler) GetGoalStatus() (uint8, error) {
 	if gh.stateMachine == nil {
-		return actionlib_msgs.LOST, fmt.Errorf("trying to get goal status on an inactive ClientGoalHandler")
+		return actionlib_msgs.GoalStatus_LOST, fmt.Errorf("trying to get goal status on an inactive ClientGoalHandler")
 	}
 
 	return gh.stateMachine.getGoalStatus().Status, nil
@@ -72,23 +72,23 @@ func (gh *clientGoalHandler) GetTerminalState() (uint8, error) {
 	}
 
 	if gh.stateMachine.state != Done {
-		gh.actionClient.logger.Warnf("Asking for terminal state when we are in state %v", gh.stateMachine.state)
+		gh.logger.Warnf("Asking for terminal state when we are in state %v", gh.stateMachine.state)
 	}
 
 	// implement get status
 	goalStatus := gh.stateMachine.getGoalStatus().Status
-	if goalStatus == actionlib_msgs.PREEMPTED ||
-		goalStatus == actionlib_msgs.SUCCEEDED ||
-		goalStatus == actionlib_msgs.ABORTED ||
-		goalStatus == actionlib_msgs.REJECTED ||
-		goalStatus == actionlib_msgs.RECALLED ||
-		goalStatus == actionlib_msgs.LOST {
+	if goalStatus == actionlib_msgs.GoalStatus_PREEMPTED ||
+		goalStatus == actionlib_msgs.GoalStatus_SUCCEEDED ||
+		goalStatus == actionlib_msgs.GoalStatus_ABORTED ||
+		goalStatus == actionlib_msgs.GoalStatus_REJECTED ||
+		goalStatus == actionlib_msgs.GoalStatus_RECALLED ||
+		goalStatus == actionlib_msgs.GoalStatus_LOST {
 
 		return goalStatus, nil
 	}
 
-	gh.actionClient.logger.Warnf("Asking for terminal state when latest goal is in %v", goalStatus)
-	return actionlib_msgs.LOST, nil
+	gh.logger.Warnf("Asking for terminal state when latest goal is in %v", goalStatus)
+	return actionlib_msgs.GoalStatus_LOST, nil
 }
 
 func (gh *clientGoalHandler) GetResult() (ros.Message, error) {

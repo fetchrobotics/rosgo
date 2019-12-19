@@ -247,6 +247,9 @@ func (ctx *MsgContext) LoadSrv(fullname string) (*SrvSpec, error) {
 	return nil, fmt.Errorf("Service definition of `%s` is not found", fullname)
 }
 
+// LoadActionFromString loads a ROS action definition from a string and returns MsgSpec
+// which contains extracted information from the definiton. Returns a non-nil error if
+// an invalid string is passed or if failed to parse the service definition
 func (ctx *MsgContext) LoadActionFromString(text string, fullname string) (*ActionSpec, error) {
 	packageName, shortName, err := packageResourceName(fullname)
 	if err != nil {
@@ -310,6 +313,9 @@ func (ctx *MsgContext) LoadActionFromString(text string, fullname string) (*Acti
 	return spec, nil
 }
 
+// LoadActionFromFile loads a ROS action definition from a file and returns MsgSpec
+// which contains extracted information from the definiton. Returns a non-nil error if
+// an invalid file path is passed or if failed to parse the service definition
 func (ctx *MsgContext) LoadActionFromFile(filePath string, fullname string) (*ActionSpec, error) {
 	bytes, e := ioutil.ReadFile(filePath)
 	if e != nil {
@@ -319,19 +325,20 @@ func (ctx *MsgContext) LoadActionFromFile(filePath string, fullname string) (*Ac
 	return ctx.LoadActionFromString(text, fullname)
 }
 
+// LoadAction loads an  if the action definition is known from ROS package paths that
+// was provided in the Constructor
 func (ctx *MsgContext) LoadAction(fullname string) (*ActionSpec, error) {
 	if path, ok := ctx.actionPathMap[fullname]; ok {
 		spec, err := ctx.LoadActionFromFile(path, fullname)
 		if err != nil {
 			return nil, err
-		} else {
-			return spec, nil
 		}
-	} else {
-		return nil, fmt.Errorf("Action definition of `%s` is not found", fullname)
+		return spec, nil
 	}
+	return nil, fmt.Errorf("Action definition of `%s` is not found", fullname)
 }
 
+// ComputeMD5Text computes the MD5 hash of given *MsgSpec
 func (ctx *MsgContext) ComputeMD5Text(spec *MsgSpec) (string, error) {
 	var buf bytes.Buffer
 	for _, c := range spec.Constants {
@@ -368,6 +375,7 @@ func (ctx *MsgContext) ComputeMsgMD5(spec *MsgSpec) (string, error) {
 	return md5sum, nil
 }
 
+// ComputeActionMD5 computes the MD5 hash of a ROS action from its MsgSpec
 func (ctx *MsgContext) ComputeActionMD5(spec *ActionSpec) (string, error) {
 	goalText, err := ctx.ComputeMD5Text(spec.ActionGoal)
 	if err != nil {
@@ -390,6 +398,7 @@ func (ctx *MsgContext) ComputeActionMD5(spec *ActionSpec) (string, error) {
 	return md5sum, nil
 }
 
+// ComputeSrvMD5 computes the MD5 hash of a ROS service from its MsgSpec
 func (ctx *MsgContext) ComputeSrvMD5(spec *SrvSpec) (string, error) {
 	reqText, err := ctx.ComputeMD5Text(spec.Request)
 	if err != nil {

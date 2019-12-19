@@ -25,36 +25,35 @@ type simpleActionServer struct {
 	executorCh            chan struct{}
 }
 
-func newSimpleActionServer(node ros.Node, action string, actType ActionType, executeCb interface{}, start bool) *simpleActionServer {
+func newSimpleActionServer(node ros.Node, action string, actType ActionType, executeCb interface{}, autostart bool) *simpleActionServer {
 	s := new(simpleActionServer)
-	s.actionServer = newDefaultActionServer(node, action, actType, s.internalGoalCallback, s.internalPreemptCallback, start)
+	s.actionServer = newDefaultActionServer(node, action, actType, s.internalGoalCallback, s.internalPreemptCallback, autostart)
 	s.newGoal = false
 	s.preemptRequest = false
 	s.newGoalPreemptRequest = false
 	s.executeCb = executeCb
 	s.logger = node.Logger()
 	s.executorCh = make(chan struct{}, 100)
+	if executeCb != nil {
+		go s.goalExecutor()
+	}
 	return s
 }
 
 func (s *simpleActionServer) Start() {
-	if s.executeCb != nil {
-		go s.goalExecutor()
-	}
-
-	go s.actionServer.Start()
+	s.actionServer.Start()
 }
 
 func (s *simpleActionServer) IsNewGoalAvailable() bool {
-	s.goalMutex.Lock()
-	defer s.goalMutex.Unlock()
+	s.goalMutex.RLock()
+	defer s.goalMutex.RUnlock()
 
 	return s.newGoal
 }
 
 func (s *simpleActionServer) IsPreemptRequested() bool {
-	s.goalMutex.Lock()
-	defer s.goalMutex.Unlock()
+	s.goalMutex.RLock()
+	defer s.goalMutex.RUnlock()
 
 	return s.preemptRequest
 }
@@ -95,7 +94,7 @@ func (s *simpleActionServer) IsActive() bool {
 	}
 
 	status := s.currentGoal.GetGoalStatus().Status
-	if status == actionlib_msgs.ACTIVE || status == actionlib_msgs.PREEMPTING {
+	if status == actionlib_msgs.GoalStatus_ACTIVE || status == actionlib_msgs.GoalStatus_PREEMPTING {
 		return true
 	}
 
@@ -171,8 +170,6 @@ func (s *simpleActionServer) internalGoalCallback(ag ActionGoal) {
 	}
 
 	s.goalMutex.Lock()
-	defer s.goalMutex.Unlock()
-
 	if (s.currentGoal == nil || goalStamp.Cmp(s.currentGoal.GetGoalId().Stamp) >= 0) &&
 		(s.nextGoal == nil || nextGoalStamp.Cmp(s.currentGoal.GetGoalId().Stamp) >= 0) {
 
@@ -185,6 +182,8 @@ func (s *simpleActionServer) internalGoalCallback(ag ActionGoal) {
 		s.nextGoal = goalHandler
 		s.newGoal = true
 		s.newGoalPreemptRequest = false
+		s.goalMutex.Unlock()
+
 		goal := goalHandler.GetGoal()
 		args := []reflect.Value{reflect.ValueOf(goal)}
 
@@ -203,9 +202,10 @@ func (s *simpleActionServer) internalGoalCallback(ag ActionGoal) {
 		select {
 		case s.executorCh <- struct{}{}:
 		default:
-			s.logger.Error("[SimpleActionServer] Exectuor new goal notification error: Channel full.")
+			s.logger.Error("[SimpleActionServer] Executor new goal notification error: Channel full.")
 		}
 	} else {
+		s.goalMutex.Unlock()
 		goalHandler.SetCancelled(s.GetDefaultResult(),
 			"This goal was canceled because another goal was received by the simple action server")
 	}
@@ -308,7 +308,7 @@ func (s *simpleActionServer) runCallback(cbType string, args []reflect.Value) er
 	if numArgsNeeded <= 1 {
 		fun.Call(args[0:numArgsNeeded])
 	} else {
-		return fmt.Errorf("unexepcted number of arguments for callback")
+		return fmt.Errorf("unexpected number of arguments for callback")
 	}
 
 	return nil

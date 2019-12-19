@@ -56,8 +56,6 @@ func (gh *serverGoalHandler) SetAccepted(text string) error {
 			"or recalling state, it is currently in state: %d", status.Status)
 	}
 
-	gh.as.PublishStatus()
-
 	return nil
 }
 

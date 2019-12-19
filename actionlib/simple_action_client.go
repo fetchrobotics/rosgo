@@ -26,31 +26,34 @@ type simpleActionClient struct {
 	logger      ros.Logger
 }
 
-func newSimpleActionClient(node ros.Node, action string, actionType ActionType) *simpleActionClient {
+func newSimpleActionClient(node ros.Node, action string, actionType ActionType, autostart bool) *simpleActionClient {
 	return &simpleActionClient{
-		ac:          newDefaultActionClient(node, action, actionType),
+		ac:          newDefaultActionClient(node, action, actionType, autostart),
 		simpleState: SimpleStateDone,
 		doneChan:    make(chan struct{}, 10),
 		logger:      node.Logger(),
 	}
 }
 
-func (sc *simpleActionClient) SendGoal(goal ros.Message, doneCb, activeCb, feedbackCb interface{}) {
+func (sc *simpleActionClient) SendGoal(goal ros.Message, doneCb, activeCb, feedbackCb interface{}) (err error) {
 	sc.StopTrackingGoal()
 	sc.doneCb = doneCb
 	sc.activeCb = activeCb
 	sc.feedbackCb = feedbackCb
 
 	sc.setSimpleState(SimpleStatePending)
-	sc.gh = sc.ac.SendGoal(goal, sc.transitionHandler, sc.feedbackHandler)
+	sc.gh, err = sc.ac.SendGoal(goal, sc.transitionHandler, sc.feedbackHandler)
+	return err
 }
 
-func (sc *simpleActionClient) SendGoalAndWait(goal ros.Message, executeTimeout, preeptTimeout ros.Duration) (uint8, error) {
+func (sc *simpleActionClient) SendGoalAndWait(goal ros.Message, executeTimeout, preemptTimeout ros.Duration) (uint8, error) {
 	sc.SendGoal(goal, nil, nil, nil)
 	if !sc.WaitForResult(executeTimeout) {
 		sc.logger.Debug("Cancelling goal")
-		sc.CancelGoal()
-		if sc.WaitForResult(preeptTimeout) {
+		if err := sc.CancelGoal(); err != nil {
+			return 1, err
+		}
+		if sc.WaitForResult(preemptTimeout) {
 			sc.logger.Debug("Preempt finished within specified timeout")
 		} else {
 			sc.logger.Debug("Preempt did not finish within specified timeout")
@@ -99,18 +102,18 @@ func (sc *simpleActionClient) GetResult() (ros.Message, error) {
 
 func (sc *simpleActionClient) GetState() (uint8, error) {
 	if sc.gh == nil {
-		return actionlib_msgs.LOST, fmt.Errorf("called get state when no goal running")
+		return actionlib_msgs.GoalStatus_LOST, fmt.Errorf("called get state when no goal running")
 	}
 
 	status, err := sc.gh.GetGoalStatus()
 	if err != nil {
-		return actionlib_msgs.LOST, err
+		return actionlib_msgs.GoalStatus_LOST, err
 	}
 
-	if status == actionlib_msgs.RECALLING {
-		status = actionlib_msgs.PENDING
-	} else if status == actionlib_msgs.PREEMPTING {
-		status = actionlib_msgs.ACTIVE
+	if status == actionlib_msgs.GoalStatus_RECALLING {
+		status = actionlib_msgs.GoalStatus_PENDING
+	} else if status == actionlib_msgs.GoalStatus_PREEMPTING {
+		status = actionlib_msgs.GoalStatus_ACTIVE
 	}
 
 	return status, nil

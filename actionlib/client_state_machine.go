@@ -57,7 +57,7 @@ type clientStateMachine struct {
 func newClientStateMachine() *clientStateMachine {
 	return &clientStateMachine{
 		state:      WaitingForGoalAck,
-		goalStatus: actionlib_msgs.GoalStatus{Status: actionlib_msgs.PENDING},
+		goalStatus: actionlib_msgs.GoalStatus{Status: actionlib_msgs.GoalStatus_PENDING},
 	}
 }
 
@@ -134,38 +134,38 @@ func (sm *clientStateMachine) getTransitions(goalStatus actionlib_msgs.GoalStatu
 	switch sm.state {
 	case WaitingForGoalAck:
 		switch status {
-		case actionlib_msgs.PENDING:
+		case actionlib_msgs.GoalStatus_PENDING:
 			stateList.PushBack(Pending)
 			break
-		case actionlib_msgs.ACTIVE:
+		case actionlib_msgs.GoalStatus_ACTIVE:
 			stateList.PushBack(Active)
 			break
-		case actionlib_msgs.REJECTED:
+		case actionlib_msgs.GoalStatus_REJECTED:
 			stateList.PushBack(Pending)
 			stateList.PushBack(WaitingForCancelAck)
 			break
-		case actionlib_msgs.RECALLING:
+		case actionlib_msgs.GoalStatus_RECALLING:
 			stateList.PushBack(Pending)
 			stateList.PushBack(Recalling)
 			break
-		case actionlib_msgs.RECALLED:
+		case actionlib_msgs.GoalStatus_RECALLED:
 			stateList.PushBack(Pending)
 			stateList.PushBack(WaitingForResult)
 			break
-		case actionlib_msgs.PREEMPTED:
+		case actionlib_msgs.GoalStatus_PREEMPTED:
 			stateList.PushBack(Active)
 			stateList.PushBack(Preempting)
 			stateList.PushBack(WaitingForResult)
 			break
-		case actionlib_msgs.SUCCEEDED:
+		case actionlib_msgs.GoalStatus_SUCCEEDED:
 			stateList.PushBack(Active)
 			stateList.PushBack(WaitingForResult)
 			break
-		case actionlib_msgs.ABORTED:
+		case actionlib_msgs.GoalStatus_ABORTED:
 			stateList.PushBack(Active)
 			stateList.PushBack(WaitingForResult)
 			break
-		case actionlib_msgs.PREEMPTING:
+		case actionlib_msgs.GoalStatus_PREEMPTING:
 			stateList.PushBack(Active)
 			stateList.PushBack(Preempting)
 			break
@@ -174,35 +174,35 @@ func (sm *clientStateMachine) getTransitions(goalStatus actionlib_msgs.GoalStatu
 
 	case Pending:
 		switch status {
-		case actionlib_msgs.PENDING:
+		case actionlib_msgs.GoalStatus_PENDING:
 			break
-		case actionlib_msgs.ACTIVE:
+		case actionlib_msgs.GoalStatus_ACTIVE:
 			stateList.PushBack(Active)
 			break
-		case actionlib_msgs.REJECTED:
+		case actionlib_msgs.GoalStatus_REJECTED:
 			stateList.PushBack(WaitingForResult)
 			break
-		case actionlib_msgs.RECALLING:
+		case actionlib_msgs.GoalStatus_RECALLING:
 			stateList.PushBack(Recalling)
 			break
-		case actionlib_msgs.RECALLED:
+		case actionlib_msgs.GoalStatus_RECALLED:
 			stateList.PushBack(Recalling)
 			stateList.PushBack(WaitingForResult)
 			break
-		case actionlib_msgs.PREEMPTED:
+		case actionlib_msgs.GoalStatus_PREEMPTED:
 			stateList.PushBack(Active)
 			stateList.PushBack(Preempting)
 			stateList.PushBack(WaitingForResult)
 			break
-		case actionlib_msgs.SUCCEEDED:
+		case actionlib_msgs.GoalStatus_SUCCEEDED:
 			stateList.PushBack(Active)
 			stateList.PushBack(WaitingForResult)
 			break
-		case actionlib_msgs.ABORTED:
+		case actionlib_msgs.GoalStatus_ABORTED:
 			stateList.PushBack(Active)
 			stateList.PushBack(WaitingForResult)
 			break
-		case actionlib_msgs.PREEMPTING:
+		case actionlib_msgs.GoalStatus_PREEMPTING:
 			stateList.PushBack(Active)
 			stateList.PushBack(Preempting)
 			break
@@ -210,178 +210,178 @@ func (sm *clientStateMachine) getTransitions(goalStatus actionlib_msgs.GoalStatu
 		break
 	case Active:
 		switch status {
-		case actionlib_msgs.PENDING:
+		case actionlib_msgs.GoalStatus_PENDING:
 			err = fmt.Errorf("invalid transition from Active to Pending")
 			break
-		case actionlib_msgs.ACTIVE:
+		case actionlib_msgs.GoalStatus_ACTIVE:
 			break
-		case actionlib_msgs.REJECTED:
+		case actionlib_msgs.GoalStatus_REJECTED:
 			err = fmt.Errorf("invalid transition from Active to Rejected")
 			break
-		case actionlib_msgs.RECALLING:
+		case actionlib_msgs.GoalStatus_RECALLING:
 			err = fmt.Errorf("invalid transition from Active to Recalling")
 			break
-		case actionlib_msgs.RECALLED:
+		case actionlib_msgs.GoalStatus_RECALLED:
 			err = fmt.Errorf("invalid transition from Active to Recalled")
 			break
-		case actionlib_msgs.PREEMPTED:
+		case actionlib_msgs.GoalStatus_PREEMPTED:
 			stateList.PushBack(Preempting)
 			stateList.PushBack(WaitingForResult)
 			break
-		case actionlib_msgs.SUCCEEDED:
+		case actionlib_msgs.GoalStatus_SUCCEEDED:
 			stateList.PushBack(WaitingForResult)
 			break
-		case actionlib_msgs.ABORTED:
+		case actionlib_msgs.GoalStatus_ABORTED:
 			stateList.PushBack(WaitingForResult)
 			break
-		case actionlib_msgs.PREEMPTING:
+		case actionlib_msgs.GoalStatus_PREEMPTING:
 			stateList.PushBack(Preempting)
 			break
 		}
 		break
 	case WaitingForResult:
 		switch status {
-		case actionlib_msgs.PENDING:
+		case actionlib_msgs.GoalStatus_PENDING:
 			err = fmt.Errorf("invalid transition from WaitingForResult to Pending")
 			break
-		case actionlib_msgs.ACTIVE:
+		case actionlib_msgs.GoalStatus_ACTIVE:
 			break
-		case actionlib_msgs.REJECTED:
+		case actionlib_msgs.GoalStatus_REJECTED:
 			break
-		case actionlib_msgs.RECALLING:
+		case actionlib_msgs.GoalStatus_RECALLING:
 			err = fmt.Errorf("invalid transition from WaitingForResult to Recalling")
 			break
-		case actionlib_msgs.RECALLED:
+		case actionlib_msgs.GoalStatus_RECALLED:
 			break
-		case actionlib_msgs.PREEMPTED:
+		case actionlib_msgs.GoalStatus_PREEMPTED:
 			break
-		case actionlib_msgs.SUCCEEDED:
+		case actionlib_msgs.GoalStatus_SUCCEEDED:
 			break
-		case actionlib_msgs.ABORTED:
+		case actionlib_msgs.GoalStatus_ABORTED:
 			break
-		case actionlib_msgs.PREEMPTING:
+		case actionlib_msgs.GoalStatus_PREEMPTING:
 			err = fmt.Errorf("invalid transition from WaitingForResult to Preempting")
 			break
 		}
 		break
 	case WaitingForCancelAck:
 		switch status {
-		case actionlib_msgs.PENDING:
+		case actionlib_msgs.GoalStatus_PENDING:
 			break
-		case actionlib_msgs.ACTIVE:
+		case actionlib_msgs.GoalStatus_ACTIVE:
 			break
-		case actionlib_msgs.REJECTED:
+		case actionlib_msgs.GoalStatus_REJECTED:
 			stateList.PushBack(WaitingForResult)
 			break
-		case actionlib_msgs.RECALLING:
+		case actionlib_msgs.GoalStatus_RECALLING:
 			stateList.PushBack(Recalling)
 			break
-		case actionlib_msgs.RECALLED:
+		case actionlib_msgs.GoalStatus_RECALLED:
 			stateList.PushBack(Recalling)
 			stateList.PushBack(WaitingForResult)
 			break
-		case actionlib_msgs.PREEMPTED:
+		case actionlib_msgs.GoalStatus_PREEMPTED:
 			stateList.PushBack(Preempting)
 			stateList.PushBack(WaitingForResult)
 			break
-		case actionlib_msgs.SUCCEEDED:
+		case actionlib_msgs.GoalStatus_SUCCEEDED:
 			stateList.PushBack(Recalling)
 			stateList.PushBack(WaitingForResult)
 			break
-		case actionlib_msgs.ABORTED:
+		case actionlib_msgs.GoalStatus_ABORTED:
 			stateList.PushBack(Recalling)
 			stateList.PushBack(WaitingForResult)
 			break
-		case actionlib_msgs.PREEMPTING:
+		case actionlib_msgs.GoalStatus_PREEMPTING:
 			stateList.PushBack(Preempting)
 			break
 		}
 		break
 	case Recalling:
 		switch status {
-		case actionlib_msgs.PENDING:
+		case actionlib_msgs.GoalStatus_PENDING:
 			err = fmt.Errorf("invalid transition from Recalling to Pending")
 			break
-		case actionlib_msgs.ACTIVE:
+		case actionlib_msgs.GoalStatus_ACTIVE:
 			err = fmt.Errorf("invalid transition from Recalling to Active")
 			break
-		case actionlib_msgs.REJECTED:
+		case actionlib_msgs.GoalStatus_REJECTED:
 			stateList.PushBack(WaitingForResult)
 			break
-		case actionlib_msgs.RECALLING:
+		case actionlib_msgs.GoalStatus_RECALLING:
 			break
-		case actionlib_msgs.RECALLED:
+		case actionlib_msgs.GoalStatus_RECALLED:
 			stateList.PushBack(WaitingForResult)
 			break
-		case actionlib_msgs.PREEMPTED:
+		case actionlib_msgs.GoalStatus_PREEMPTED:
 			stateList.PushBack(Preempting)
 			stateList.PushBack(WaitingForResult)
 			break
-		case actionlib_msgs.SUCCEEDED:
+		case actionlib_msgs.GoalStatus_SUCCEEDED:
 			stateList.PushBack(Preempting)
 			stateList.PushBack(WaitingForResult)
 			break
-		case actionlib_msgs.ABORTED:
+		case actionlib_msgs.GoalStatus_ABORTED:
 			stateList.PushBack(Preempting)
 			stateList.PushBack(WaitingForResult)
 			break
-		case actionlib_msgs.PREEMPTING:
+		case actionlib_msgs.GoalStatus_PREEMPTING:
 			stateList.PushBack(Preempting)
 			break
 		}
 		break
 	case Preempting:
 		switch status {
-		case actionlib_msgs.PENDING:
+		case actionlib_msgs.GoalStatus_PENDING:
 			err = fmt.Errorf("invalid transition from Preempting to Pending")
 			break
-		case actionlib_msgs.ACTIVE:
+		case actionlib_msgs.GoalStatus_ACTIVE:
 			err = fmt.Errorf("invalid transition from Preempting to Active")
 			break
-		case actionlib_msgs.REJECTED:
+		case actionlib_msgs.GoalStatus_REJECTED:
 			err = fmt.Errorf("invalid transition from Preempting to Rejected")
 			break
-		case actionlib_msgs.RECALLING:
+		case actionlib_msgs.GoalStatus_RECALLING:
 			err = fmt.Errorf("invalid transition from Preempting to Recalling")
 			break
-		case actionlib_msgs.RECALLED:
+		case actionlib_msgs.GoalStatus_RECALLED:
 			err = fmt.Errorf("invalid transition from Preempting to Recalled")
 			break
-		case actionlib_msgs.PREEMPTED:
+		case actionlib_msgs.GoalStatus_PREEMPTED:
 			stateList.PushBack(WaitingForResult)
 			break
-		case actionlib_msgs.SUCCEEDED:
+		case actionlib_msgs.GoalStatus_SUCCEEDED:
 			stateList.PushBack(WaitingForResult)
 			break
-		case actionlib_msgs.ABORTED:
+		case actionlib_msgs.GoalStatus_ABORTED:
 			stateList.PushBack(WaitingForResult)
 			break
-		case actionlib_msgs.PREEMPTING:
+		case actionlib_msgs.GoalStatus_PREEMPTING:
 			break
 		}
 		break
 	case Done:
 		switch status {
-		case actionlib_msgs.PENDING:
+		case actionlib_msgs.GoalStatus_PENDING:
 			err = fmt.Errorf("invalid transition from Done to Pending")
 			break
-		case actionlib_msgs.ACTIVE:
+		case actionlib_msgs.GoalStatus_ACTIVE:
 			err = fmt.Errorf("invalid transition from Done to Active")
 			break
-		case actionlib_msgs.REJECTED:
+		case actionlib_msgs.GoalStatus_REJECTED:
 			break
-		case actionlib_msgs.RECALLING:
+		case actionlib_msgs.GoalStatus_RECALLING:
 			err = fmt.Errorf("invalid transition from Done to Recalling")
 			break
-		case actionlib_msgs.RECALLED:
+		case actionlib_msgs.GoalStatus_RECALLED:
 			break
-		case actionlib_msgs.PREEMPTED:
+		case actionlib_msgs.GoalStatus_PREEMPTED:
 			break
-		case actionlib_msgs.SUCCEEDED:
+		case actionlib_msgs.GoalStatus_SUCCEEDED:
 			break
-		case actionlib_msgs.ABORTED:
+		case actionlib_msgs.GoalStatus_ABORTED:
 			break
-		case actionlib_msgs.PREEMPTING:
+		case actionlib_msgs.GoalStatus_PREEMPTING:
 			err = fmt.Errorf("invalid transition from Done to Preempting")
 			break
 		}

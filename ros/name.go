@@ -7,11 +7,18 @@ import (
 )
 
 const (
-	Sep       = "/"
-	GlobalNS  = "/"
+	// Sep defines the sequential seperater identifier.
+	Sep = "/"
+
+	// GlobalNS defines the global namespace identifier.
+	GlobalNS = "/"
+
+	// PrivateNS defines the private namespace identifier.
 	PrivateNS = "~"
 )
 
+// NameMap defines a string key/value map that is used to store
+// argument/namespace mappings
 type NameMap map[string]string
 
 func getNamespace(name string) string {
@@ -44,10 +51,10 @@ func qualifyNodeName(nodeName string) (string, string, error) {
 	}
 	if len(components) == 1 {
 		return GlobalNS, components[0], nil
-	} else {
-		namespace := GlobalNS + strings.Join(components[:len(components)-1], Sep)
-		return namespace, components[len(components)-1], nil
 	}
+
+	namespace := GlobalNS + strings.Join(components[:len(components)-1], Sep)
+	return namespace, components[len(components)-1], nil
 }
 
 func isValidName(name string) bool {
@@ -71,34 +78,34 @@ func isPrivateName(name string) bool {
 	return len(name) > 0 && name[0:1] == PrivateNS
 }
 
-// Remove sequential seperater
+// canonicalizeName removes sequential seperater
 func canonicalizeName(name string) string {
 	if name == GlobalNS {
 		return name
-	} else {
-		components := []string{}
-		for _, word := range strings.Split(name, Sep) {
-			if len(word) > 0 {
-				components = append(components, word)
-			}
-		}
-		if name[0:1] == GlobalNS {
-			return GlobalNS + strings.Join(components, Sep)
-		} else {
-			return strings.Join(components, Sep)
+	}
+
+	components := []string{}
+	for _, word := range strings.Split(name, Sep) {
+		if len(word) > 0 {
+			components = append(components, word)
 		}
 	}
+	if name[0:1] == GlobalNS {
+		return GlobalNS + strings.Join(components, Sep)
+	}
+
+	return strings.Join(components, Sep)
 }
 
-type NameResolver struct {
+type nameResolver struct {
 	nodeName        string
 	namespace       string
 	mapping         NameMap
 	resolvedMapping NameMap
 }
 
-func newNameResolver(namespace string, nodeName string, remapping NameMap) *NameResolver {
-	n := new(NameResolver)
+func newNameResolver(namespace string, nodeName string, remapping NameMap) *nameResolver {
+	n := new(nameResolver)
 
 	n.nodeName = nodeName
 	n.namespace = canonicalizeName(namespace)
@@ -115,7 +122,7 @@ func newNameResolver(namespace string, nodeName string, remapping NameMap) *Name
 }
 
 // Resolve a ROS name to global name
-func (n *NameResolver) resolve(name string) string {
+func (n *nameResolver) resolve(name string) string {
 	if len(name) == 0 {
 		return n.namespace
 	}
@@ -134,7 +141,7 @@ func (n *NameResolver) resolve(name string) string {
 }
 
 // Resolve a ROS name with remapping
-func (n *NameResolver) remap(name string) string {
+func (n *nameResolver) remap(name string) string {
 	key := n.resolve(name)
 	if value, ok := n.resolvedMapping[key]; ok {
 		return value

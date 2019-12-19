@@ -36,15 +36,17 @@ type defaultServiceServer struct {
 func newDefaultServiceServer(node *defaultNode, service string, srvType ServiceType, handler interface{}) *defaultServiceServer {
 	logger := node.logger
 	server := new(defaultServiceServer)
-	if listener, err := net.Listen("tcp", fmt.Sprintf("%s:0", node.listenIP)); err != nil {
+	listener, err := net.Listen("tcp", fmt.Sprintf("%s:0", node.listenIP))
+	if err != nil {
 		panic(err)
-	} else {
-		if tcpListener, ok := listener.(*net.TCPListener); ok {
-			server.listener = tcpListener
-		} else {
-			panic(fmt.Errorf("Server listener is not TCPListener"))
-		}
 	}
+
+	tcpListener, ok := listener.(*net.TCPListener)
+	if !ok {
+		panic(fmt.Errorf("Server listener is not TCPListener"))
+	}
+
+	server.listener = tcpListener
 	server.node = node
 	server.service = service
 	server.srvType = srvType
@@ -77,7 +79,6 @@ func (s *defaultServiceServer) Shutdown() {
 	s.shutdownChan <- struct{}{}
 }
 
-// event loop
 func (s *defaultServiceServer) start() {
 	logger := s.node.logger
 	logger.Debugf("service server '%s' start listen %s.", s.service, s.listener.Addr().String())

@@ -9,7 +9,7 @@ import (
 
 type goalIDGenerator struct {
 	goals      int
-	goalsMutex sync.RWMutex
+	goalsMutex sync.Mutex
 	nodeName   string
 }
 

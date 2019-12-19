@@ -6,20 +6,20 @@ import (
 	"github.com/fetchrobotics/rosgo/ros"
 )
 
-func NewActionClient(node ros.Node, action string, actionType ActionType) ActionClient {
-	return newDefaultActionClient(node, action, actionType)
+func NewActionClient(node ros.Node, action string, actionType ActionType, autostart bool) ActionClient {
+	return newDefaultActionClient(node, action, actionType, autostart)
 }
 
-func NewActionServer(node ros.Node, action string, actionType ActionType, goalCb, cancelCb interface{}, autoStart bool) ActionServer {
-	return newDefaultActionServer(node, action, actionType, goalCb, cancelCb, autoStart)
+func NewActionServer(node ros.Node, action string, actionType ActionType, goalCb, cancelCb interface{}, autostart bool) ActionServer {
+	return newDefaultActionServer(node, action, actionType, goalCb, cancelCb, autostart)
 }
 
-func NewSimpleActionClient(node ros.Node, action string, actionType ActionType) SimpleActionClient {
-	return newSimpleActionClient(node, action, actionType)
+func NewSimpleActionClient(node ros.Node, action string, actionType ActionType, autostart bool) SimpleActionClient {
+	return newSimpleActionClient(node, action, actionType, autostart)
 }
 
-func NewSimpleActionServer(node ros.Node, action string, actionType ActionType, executeCb interface{}, autoStart bool) SimpleActionServer {
-	return newSimpleActionServer(node, action, actionType, executeCb, autoStart)
+func NewSimpleActionServer(node ros.Node, action string, actionType ActionType, executeCb interface{}, autostart bool) SimpleActionServer {
+	return newSimpleActionServer(node, action, actionType, executeCb, autostart)
 }
 
 func NewServerGoalHandlerWithGoal(as ActionServer, goal ActionGoal) ServerGoalHandler {
@@ -32,7 +32,7 @@ func NewServerGoalHandlerWithGoalId(as ActionServer, goalID *actionlib_msgs.Goal
 
 type ActionClient interface {
 	WaitForServer(timeout ros.Duration) bool
-	SendGoal(goal ros.Message, transitionCallback interface{}, feedbackCallback interface{}) ClientGoalHandler
+	SendGoal(goal ros.Message, transitionCallback interface{}, feedbackCallback interface{}) (ClientGoalHandler, error)
 	CancelAllGoals()
 	CancelAllGoalsBeforeTime(stamp ros.Time)
 }
@@ -48,7 +48,7 @@ type ActionServer interface {
 }
 
 type SimpleActionClient interface {
-	SendGoal(goal ros.Message, doneCb, activeCb, feedbackCb interface{})
+	SendGoal(goal ros.Message, doneCb, activeCb, feedbackCb interface{}) error
 	SendGoalAndWait(goal ros.Message, executeTimeout, preeptTimeout ros.Duration) (uint8, error)
 	WaitForServer(timeout ros.Duration) bool
 	WaitForResult(timeout ros.Duration) bool

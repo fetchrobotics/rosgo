@@ -72,20 +72,21 @@ func (c *defaultServiceClient) Call(srv Service) error {
 
 	// 2. Read reponse header
 	conn.SetDeadline(time.Now().Add(10 * time.Millisecond))
-	if resHeaders, err := readConnectionHeader(conn); err != nil {
+	resHeaders, err := readConnectionHeader(conn)
+	if err != nil {
 		return err
-	} else {
-		logger.Debug("TCPROS Response Header:")
-		resHeaderMap := make(map[string]string)
-		for _, h := range resHeaders {
-			resHeaderMap[h.key] = h.value
-			logger.Debugf("  `%s` = `%s`", h.key, h.value)
-		}
-		if resHeaderMap["type"] != msgType || resHeaderMap["md5sum"] != md5sum {
-			logger.Fatalf("Incompatible message type!")
-		}
-		logger.Debug("Start receiving messages...")
 	}
+
+	logger.Debug("TCPROS Response Header:")
+	resHeaderMap := make(map[string]string)
+	for _, h := range resHeaders {
+		resHeaderMap[h.key] = h.value
+		logger.Debugf("  `%s` = `%s`", h.key, h.value)
+	}
+	if resHeaderMap["type"] != msgType || resHeaderMap["md5sum"] != md5sum {
+		logger.Fatalf("Incompatible message type!")
+	}
+	logger.Debug("Start receiving messages...")
 
 	// 3. Send request
 	var buf bytes.Buffer
@@ -127,14 +128,14 @@ func (c *defaultServiceClient) Call(srv Service) error {
 
 	// 5. Receive response
 	conn.SetDeadline(time.Now().Add(10 * time.Millisecond))
-	//logger.Debug("Reading message size...")
+	logger.Debug("Reading message size...")
 	var msgSize uint32
 	if err := binary.Read(conn, binary.LittleEndian, &msgSize); err != nil {
 		return err
 	}
 	logger.Debugf("  %d", msgSize)
 	resBuffer := make([]byte, int(msgSize))
-	//logger.Debug("Reading message body...")
+	logger.Debug("Reading message body...")
 	if _, err = io.ReadFull(conn, resBuffer); err != nil {
 		return err
 	}

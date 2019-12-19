@@ -13,7 +13,7 @@ import (
 
 type defaultActionServer struct {
 	node             ros.Node
-	autoStart        bool
+	autostart        bool
 	started          bool
 	action           string
 	actionType       ActionType
@@ -45,7 +45,7 @@ type defaultActionServer struct {
 func newDefaultActionServer(node ros.Node, action string, actType ActionType, goalCb interface{}, cancelCb interface{}, start bool) *defaultActionServer {
 	return &defaultActionServer{
 		node:            node,
-		autoStart:       start,
+		autostart:       start,
 		started:         false,
 		action:          action,
 		actionType:      actType,
@@ -69,7 +69,7 @@ func (as *defaultActionServer) init() {
 
 	// setup action result type so that we can create default result messages
 	res := as.actionResult.NewMessage().(ActionResult).GetResult()
-	as.actionResultType = res.Type()
+	as.actionResultType = res.GetType()
 
 	// get frequency from ros params
 	as.statusFrequency = ros.NewRate(5.0)
@@ -164,7 +164,7 @@ func (as *defaultActionServer) PublishStatus() {
 	as.statusPubChan <- struct{}{}
 }
 
-// internalCancelCallback recieves cancel message from client
+// internalCancelCallback receives cancel message from client
 func (as *defaultActionServer) internalCancelCallback(goalID *actionlib_msgs.GoalID, event ros.MessageEvent) {
 	as.handlersMutex.Lock()
 	defer as.handlersMutex.Unlock()
@@ -208,9 +208,9 @@ func (as *defaultActionServer) internalCancelCallback(goalID *actionlib_msgs.Goa
 	}
 }
 
-// internalGoalCallback recieves the goals from client and checks if
+// internalGoalCallback receives the goals from client and checks if
 // the goalID already exists in the status list. If not, it will call
-// server's goalCallback with goal that was recieved from the client.
+// server's goalCallback with goal that was received from the client.
 func (as *defaultActionServer) internalGoalCallback(goal ActionGoal, event ros.MessageEvent) {
 	as.handlersMutex.Lock()
 	defer as.handlersMutex.Unlock()
@@ -222,8 +222,8 @@ func (as *defaultActionServer) internalGoalCallback(goal ActionGoal, event ros.M
 		if goalID.Id == id {
 			st := gh.GetGoalStatus()
 			logger.Debugf("Goal %s was already in the status list with status %+v", goalID.Id, st.Status)
-			if st.Status == actionlib_msgs.RECALLING {
-				st.Status = actionlib_msgs.RECALLED
+			if st.Status == actionlib_msgs.GoalStatus_RECALLING {
+				st.Status = actionlib_msgs.GoalStatus_RECALLED
 				result := as.actionResultType.NewMessage()
 				as.PublishResult(st, result)
 			}

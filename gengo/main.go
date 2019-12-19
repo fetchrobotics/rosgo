@@ -123,10 +123,10 @@ func main() {
 		var spec *ActionSpec
 		var err error
 
-		if len(os.Args) == 3 {
+		if flag.NArg() == 2 {
 			spec, err = context.LoadAction(fullname)
 		} else {
-			spec, err = context.LoadActionFromFile(os.Args[3], fullname)
+			spec, err = context.LoadActionFromFile(flag.Arg(2), fullname)
 		}
 		if err != nil {
 			fmt.Println(err)
@@ -154,7 +154,7 @@ func main() {
 		}
 
 	} else {
-		fmt.Println("USAGE: gengo <MSG>")
+		fmt.Println("USAGE: gengo [-out=] [-import_path=] msg|srv|action <NAME> [<FILE>]")
 		os.Exit(-1)
 	}
 	fmt.Println("Done")

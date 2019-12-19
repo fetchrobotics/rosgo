@@ -6,6 +6,6 @@ import (
 
 func assertEqual(t *testing.T, a interface{}, b interface{}) {
 	if a != b {
-		t.Fatalf("%s != %s", a, b)
+		t.Errorf("%s != %s", a, b)
 	}
 }

@@ -11,6 +11,7 @@ import (
 
 type defaultActionClient struct {
 	started          bool
+	autostart        bool
 	node             ros.Node
 	action           string
 	actionType       ActionType
@@ -31,8 +32,9 @@ type defaultActionClient struct {
 	callerID         string
 }
 
-func newDefaultActionClient(node ros.Node, action string, actType ActionType) *defaultActionClient {
+func newDefaultActionClient(node ros.Node, action string, actType ActionType, autostart bool) *defaultActionClient {
 	ac := &defaultActionClient{
+		autostart:      autostart,
 		node:           node,
 		action:         action,
 		actionType:     actType,
@@ -49,16 +51,22 @@ func newDefaultActionClient(node ros.Node, action string, actType ActionType) *d
 	ac.resultSub = node.NewSubscriber(fmt.Sprintf("%s/result", action), actType.ResultType(), ac.internalResultCallback)
 	ac.feedbackSub = node.NewSubscriber(fmt.Sprintf("%s/feedback", action), actType.FeedbackType(), ac.internalFeedbackCallback)
 	ac.statusSub = node.NewSubscriber(fmt.Sprintf("%s/status", action), actionlib_msgs.MsgGoalStatusArray, ac.internalStatusCallback)
+	if ac.autostart {
+		go node.Spin()
+	}
 
 	return ac
 }
 
-func (ac *defaultActionClient) SendGoal(goal ros.Message, transitionCb, feedbackCb interface{}) ClientGoalHandler {
+func (ac *defaultActionClient) SendGoal(goal ros.Message, transitionCb, feedbackCb interface{}) (ClientGoalHandler, error) {
 	if !ac.started {
-		ac.logger.Error("[ActionClient] Trying to send a goal on an inactive ActionClient")
+		return nil, fmt.Errorf("trying to send a goal on an inactive ActionClient")
 	}
 
-	ag := ac.actionType.GoalType().NewMessage().(ActionGoal)
+	ag, ok := ac.actionType.GoalType().NewMessage().(ActionGoal)
+	if !ok {
+		return nil, fmt.Errorf("error trying to cast goal to ActionGoal")
+	}
 	goalID := actionlib_msgs.GoalID{Id: ac.goalIDGen.generateID(), Stamp: ros.Now()}
 	header := std_msgs.Header{Stamp: ros.Now()}
 
@@ -73,7 +81,7 @@ func (ac *defaultActionClient) SendGoal(goal ros.Message, transitionCb, feedback
 	ac.handlers = append(ac.handlers, handler)
 	ac.handlersMutex.Unlock()
 
-	return handler
+	return handler, nil
 }
 
 func (ac *defaultActionClient) CancelAllGoals() {
@@ -105,7 +113,9 @@ func (ac *defaultActionClient) Shutdown() {
 	}
 
 	ac.handlers = nil
-	ac.node.Shutdown()
+	if ac.autostart {
+		ac.node.Shutdown()
+	}
 }
 
 func (ac *defaultActionClient) PublishActionGoal(ag ActionGoal) {
@@ -190,7 +200,7 @@ func (ac *defaultActionClient) internalStatusCallback(statusArr *actionlib_msgs.
 
 	if !ac.statusReceived {
 		ac.statusReceived = true
-		ac.logger.Debug("Recieved first status message from action server ")
+		ac.logger.Debug("Received first status message from action server ")
 	} else if ac.callerID != event.PublisherName {
 		ac.logger.Debug("Previously received status from %s, now from %s. Did the action server change", ac.callerID, event.PublisherName)
 	}

@@ -315,11 +315,11 @@ func TestServiceClientAndServer(t *testing.T) {
 		t.Fatal("Failed to initialize '/add_two_ints' service server")
 	}
 	defer server.Shutdown()
-	time.Sleep(1 * time.Second)
+	time.Sleep(2 * time.Second)
 
 	client := node.NewServiceClient("/add_two_ints", rospy_tutorials.SrvAddTwoInts)
 	defer client.Shutdown()
-	time.Sleep(1 * time.Second)
+	time.Sleep(2 * time.Second)
 
 	var a int64 = 1
 	var b int64 = 2

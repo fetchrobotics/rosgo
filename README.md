@@ -11,7 +11,7 @@
 - Maintainer: Fetch Robotics
 - License: Apache License 2.0
 - Source: git [https://github.com/fetchrobotics/rosgo](https://github.com/fetchrobotics/rosgo)
-- ROS Version Support: [Indigo] [Jade] [Melodic]
+- ROS Version Support: [Indigo] [Jade] [Melodic] [Noetic]
 
 ## Prerequisites
 
@@ -29,13 +29,13 @@ At present, following basic functions are provided.
 - Publisher/Subscriber API (with TCPROS)
 - Remapping
 - Message Generation
+- Action Servers
+- Bus Statistics
 
 Work to do:
 
-- Action Servers
 - Go Module Support
 - Tutorials
-- Bus Statistics
 - ROS 2 Support
 
 ## How to use

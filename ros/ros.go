@@ -24,8 +24,8 @@ type Node interface {
 	// If the function takes 2 arguments, the first argument should be of the
 	// generated message type and the second argument should be of type MessageEvent.
 	NewSubscriber(topic string, msgType MessageType, callback interface{}) Subscriber
-	NewServiceClient(service string, srvType ServiceType) ServiceClient
-	NewServiceServer(service string, srvType ServiceType, callback interface{}) ServiceServer
+	NewServiceClient(service string, srvType ServiceType, options ...ServiceClientOption) ServiceClient
+	NewServiceServer(service string, srvType ServiceType, callback interface{}, options ...ServiceServerOption) ServiceServer
 
 	OK() bool
 	SpinOnce()
@@ -44,8 +44,25 @@ type Node interface {
 	Name() string
 }
 
-func NewNode(name string, args []string) (Node, error) {
-	return newDefaultNode(name, args)
+// NodeOption allows to customize created nodes.
+type NodeOption func(n *defaultNode)
+
+// NodeServiceClientOptions specifies default options applied to the service clients created in this node.
+func NodeServiceClientOptions(opts ...ServiceClientOption) NodeOption {
+	return func(n *defaultNode) {
+		n.srvClientOpts = opts
+	}
+}
+
+// NodeServiceServerOptions specifies default options applied to the service servers created in this node.
+func NodeServiceServerOptions(opts ...ServiceServerOption) NodeOption {
+	return func(n *defaultNode) {
+		n.srvServerOpts = opts
+	}
+}
+
+func NewNode(name string, args []string, opts ...NodeOption) (Node, error) {
+	return newDefaultNode(name, args, opts...)
 }
 
 type Publisher interface {

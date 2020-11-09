@@ -31,9 +31,10 @@ type defaultServiceServer struct {
 	sessions         *list.List
 	shutdownChan     chan struct{}
 	sessionCloseChan chan *remoteClientSessionCloseEvent
+	tcpTimeout       time.Duration
 }
 
-func newDefaultServiceServer(node *defaultNode, service string, srvType ServiceType, handler interface{}) *defaultServiceServer {
+func newDefaultServiceServer(node *defaultNode, service string, srvType ServiceType, handler interface{}, opts ...ServiceServerOption) *defaultServiceServer {
 	logger := node.logger
 	server := new(defaultServiceServer)
 	if listener, err := net.Listen("tcp", ":0"); err != nil {
@@ -49,6 +50,11 @@ func newDefaultServiceServer(node *defaultNode, service string, srvType ServiceT
 	server.service = service
 	server.srvType = srvType
 	server.handler = handler
+	server.tcpTimeout = 10 * time.Millisecond
+	for _, option := range opts {
+		option(server)
+	}
+
 	server.sessions = list.New()
 	server.shutdownChan = make(chan struct{}, 10)
 	server.sessionCloseChan = make(chan *remoteClientSessionCloseEvent, 10)
@@ -145,6 +151,7 @@ type remoteClientSession struct {
 	quitChan     chan struct{}
 	responseChan chan []byte
 	errorChan    chan error
+	tcpTimeout   time.Duration
 }
 
 func newRemoteClientSession(s *defaultServiceServer, conn net.Conn) *remoteClientSession {
@@ -154,6 +161,7 @@ func newRemoteClientSession(s *defaultServiceServer, conn net.Conn) *remoteClien
 	session.quitChan = make(chan struct{}, 1)
 	session.responseChan = make(chan []byte)
 	session.errorChan = make(chan error)
+	session.tcpTimeout = s.tcpTimeout
 	return session
 }
 
@@ -184,7 +192,7 @@ func (s *remoteClientSession) start() {
 	}()
 
 	// 1. Read request header
-	conn.SetDeadline(time.Now().Add(10 * time.Millisecond))
+	conn.SetDeadline(time.Now().Add(s.tcpTimeout))
 	reqHeader, err := readConnectionHeader(conn)
 	if err != nil {
 		panic(err)
@@ -205,7 +213,7 @@ func (s *remoteClientSession) start() {
 	for _, h := range headers {
 		logger.Debugf("  `%s` = `%s`", h.key, h.value)
 	}
-	conn.SetDeadline(time.Now().Add(10 * time.Millisecond))
+	conn.SetDeadline(time.Now().Add(s.tcpTimeout))
 	if err := writeConnectionHeader(headers, conn); err != nil {
 		panic(err)
 	}
@@ -222,14 +230,14 @@ func (s *remoteClientSession) start() {
 	// 3. Read request
 	logger.Debug("Reading message size...")
 	var msgSize uint32
-	conn.SetDeadline(time.Now().Add(10 * time.Millisecond))
+	conn.SetDeadline(time.Now().Add(s.tcpTimeout))
 	if err := binary.Read(conn, binary.LittleEndian, &msgSize); err != nil {
 		panic(err)
 	}
 	logger.Debugf("  %d", msgSize)
 	resBuffer := make([]byte, int(msgSize))
 	logger.Debug("Reading message body...")
-	conn.SetDeadline(time.Now().Add(10 * time.Millisecond))
+	conn.SetDeadline(time.Now().Add(s.tcpTimeout))
 	if _, err = io.ReadFull(conn, resBuffer); err != nil {
 		panic(err)
 	}
@@ -271,18 +279,18 @@ func (s *remoteClientSession) start() {
 	case resMsg := <-s.responseChan:
 		// 4. Write OK byte
 		var ok byte = 1
-		conn.SetDeadline(time.Now().Add(10 * time.Millisecond))
+		conn.SetDeadline(time.Now().Add(s.tcpTimeout))
 		if err := binary.Write(conn, binary.LittleEndian, &ok); err != nil {
 			panic(err)
 		}
 		// 5. Write response
 		logger.Debug(len(resMsg))
 		size := uint32(len(resMsg))
-		conn.SetDeadline(time.Now().Add(10 * time.Millisecond))
+		conn.SetDeadline(time.Now().Add(s.tcpTimeout))
 		if err := binary.Write(conn, binary.LittleEndian, size); err != nil {
 			panic(err)
 		}
-		conn.SetDeadline(time.Now().Add(10 * time.Millisecond))
+		conn.SetDeadline(time.Now().Add(s.tcpTimeout))
 		if _, err := conn.Write(resMsg); err != nil {
 			panic(err)
 		}
@@ -290,17 +298,17 @@ func (s *remoteClientSession) start() {
 		logger.Error(err)
 		// 4. Write OK byte
 		var ok byte
-		conn.SetDeadline(time.Now().Add(10 * time.Millisecond))
+		conn.SetDeadline(time.Now().Add(s.tcpTimeout))
 		if err := binary.Write(conn, binary.LittleEndian, &ok); err != nil {
 			panic(err)
 		}
 		errMsg := err.Error()
 		size := uint32(len(errMsg))
-		conn.SetDeadline(time.Now().Add(10 * time.Millisecond))
+		conn.SetDeadline(time.Now().Add(s.tcpTimeout))
 		if err := binary.Write(conn, binary.LittleEndian, size); err != nil {
 			panic(err)
 		}
-		conn.SetDeadline(time.Now().Add(10 * time.Millisecond))
+		conn.SetDeadline(time.Now().Add(s.tcpTimeout))
 		if _, err := conn.Write([]byte(errMsg)); err != nil {
 			panic(err)
 		}

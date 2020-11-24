@@ -386,7 +386,11 @@ func (node *defaultNode) NewSubscriber(topic string, msgType MessageType, callba
 		node.subscribers[name] = sub
 
 		logger.Debugf("Start subscriber goroutine for topic '%s'", sub.topic)
-		go sub.start(&node.waitGroup, node.qualifiedName, node.xmlrpcURI, node.masterURI, node.jobChan, logger)
+		go sub.start(&node.waitGroup, node.qualifiedName, node.xmlrpcURI, node.masterURI, node.jobChan, logger, func() {
+			node.subscribersMutex.Lock()
+			defer node.subscribersMutex.Unlock()
+			delete(node.subscribers, name)
+		})
 		logger.Debugf("Done")
 		sub.pubListChan <- publishers
 		logger.Debugf("Update publisher list for topic '%s'", sub.topic)

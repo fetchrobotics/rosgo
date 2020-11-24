@@ -45,7 +45,7 @@ func newDefaultSubscriber(topic string, msgType MessageType, callback interface{
 	return sub
 }
 
-func (sub *defaultSubscriber) start(wg *sync.WaitGroup, nodeID string, nodeURI string, masterURI string, jobChan chan func(), logger Logger) {
+func (sub *defaultSubscriber) start(wg *sync.WaitGroup, nodeID string, nodeURI string, masterURI string, jobChan chan func(), logger Logger, unregisterFromNode func()) {
 	logger.Debugf("Subscriber goroutine for %s started.", sub.topic)
 	wg.Add(1)
 	defer wg.Done()
@@ -140,6 +140,8 @@ func (sub *defaultSubscriber) start(wg *sync.WaitGroup, nodeID string, nodeURI s
 			if err != nil {
 				logger.Warn(err)
 			}
+
+			unregisterFromNode()
 			return
 		}
 	}

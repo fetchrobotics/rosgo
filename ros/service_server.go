@@ -151,6 +151,7 @@ func newRemoteClientSession(s *defaultServiceServer, conn net.Conn) *remoteClien
 	session := new(remoteClientSession)
 	session.server = s
 	session.conn = conn
+	session.quitChan = make(chan struct{}, 1)
 	session.responseChan = make(chan []byte)
 	session.errorChan = make(chan error)
 	return session
@@ -303,6 +304,8 @@ func (s *remoteClientSession) start() {
 		if _, err := conn.Write([]byte(errMsg)); err != nil {
 			panic(err)
 		}
+	case <-s.quitChan:
+		s.errorChan <- fmt.Errorf("service shut down")
 	case <-timeoutChan:
 		panic(fmt.Errorf("service callback timeout"))
 	}

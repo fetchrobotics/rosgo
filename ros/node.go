@@ -76,10 +76,15 @@ type defaultNode struct {
 	homeDir          string
 	nameResolver     *NameResolver
 	nonRosArgs       []string
+	srvClientOpts    []ServiceClientOption
+	srvServerOpts    []ServiceServerOption
 }
 
-func newDefaultNode(name string, args []string) (*defaultNode, error) {
+func newDefaultNode(name string, args []string, opts ...NodeOption) (*defaultNode, error) {
 	node := new(defaultNode)
+	for _, opt := range opts {
+		opt(node)
+	}
 
 	namespace, nodeName, err := qualifyNodeName(name)
 	if err != nil {
@@ -401,13 +406,41 @@ func (node *defaultNode) NewSubscriber(topic string, msgType MessageType, callba
 	return sub
 }
 
-func (node *defaultNode) NewServiceClient(service string, srvType ServiceType) ServiceClient {
+// ServiceClientOption customizes service client instances.
+type ServiceClientOption func(c *defaultServiceClient)
+
+// ServiceClientTCPTimeout changes default timeout of 10ms to the specified timeout. This timeout is
+// applied to each TCP operation (such as writing header to the connection, reading response header, etc), rather than
+// TCP connection as a whole. Total timeout is dependent on the number of operations.
+func ServiceClientTCPTimeout(t time.Duration) ServiceClientOption {
+	return func(c *defaultServiceClient) {
+		c.tcpTimeout = t
+	}
+}
+
+func (node *defaultNode) NewServiceClient(service string, srvType ServiceType, options ...ServiceClientOption) ServiceClient {
 	name := node.nameResolver.remap(service)
-	client := newDefaultServiceClient(node.logger, node.qualifiedName, node.masterURI, name, srvType)
+	opts := []ServiceClientOption{}
+	opts = append(opts, node.srvClientOpts...)
+	opts = append(opts, options...)
+
+	client := newDefaultServiceClient(node.logger, node.qualifiedName, node.masterURI, name, srvType, opts...)
 	return client
 }
 
-func (node *defaultNode) NewServiceServer(service string, srvType ServiceType, handler interface{}) ServiceServer {
+// ServiceServerOption customizes service server instances.
+type ServiceServerOption func(c *defaultServiceServer)
+
+// ServiceServerTCPTimeout changes default timeout of 10ms to the specified timeout. This timeout is
+// applied to each TCP operation (such as writing header to the connection, reading response header, etc), rather than
+// TCP connection as a whole. Total timeout is dependent on the number of operations.
+func ServiceServerTCPTimeout(t time.Duration) ServiceServerOption {
+	return func(s *defaultServiceServer) {
+		s.tcpTimeout = t
+	}
+}
+
+func (node *defaultNode) NewServiceServer(service string, srvType ServiceType, handler interface{}, options ...ServiceServerOption) ServiceServer {
 	node.serversMutex.Lock()
 	defer node.serversMutex.Unlock()
 
@@ -417,7 +450,11 @@ func (node *defaultNode) NewServiceServer(service string, srvType ServiceType, h
 		server.Shutdown()
 	}
 
-	server = newDefaultServiceServer(node, name, srvType, handler)
+	opts := []ServiceServerOption{}
+	opts = append(opts, node.srvServerOpts...)
+	opts = append(opts, options...)
+
+	server = newDefaultServiceServer(node, name, srvType, handler, opts...)
 	if server == nil {
 		return nil
 	}

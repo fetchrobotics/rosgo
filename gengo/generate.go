@@ -144,10 +144,19 @@ func (m *{{ .ShortName }}) Serialize(buf *bytes.Buffer) error {
 }
 
 
-func (m *{{ .ShortName }}) Deserialize(buf *bytes.Reader) error {
+func (m *{{ .ShortName }}) Deserialize(buf *ros.Reader) error {
     var err error = nil
 {{- range .Fields }}
-{{-    if .IsArray }}
+{{-    if and (.IsArray) (eq .GoType "uint8") (lt .ArrayLen 0) }}
+{{/* Special case for no-copy deserialization of byte slices */}}
+    {
+        var size uint32
+        if err = binary.Read(buf, binary.LittleEndian, &size); err != nil {
+            return err
+        }
+        m.{{ .GoName }} = buf.Next(int(size))
+    }
+{{-    else if .IsArray }}
     {
 
 {{-        if lt .ArrayLen 0 }}

@@ -1,7 +1,6 @@
 package ros
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -110,7 +109,7 @@ func (sub *defaultSubscriber) start(wg *sync.WaitGroup, nodeID string, nodeURI s
 			copy(callbacks, sub.callbacks)
 			jobChan <- func() {
 				m := sub.msgType.NewMessage()
-				reader := bytes.NewReader(msgEvent.bytes)
+				reader := NewReader(msgEvent.bytes)
 				if err := m.Deserialize(reader); err != nil {
 					logger.Error(err)
 				}

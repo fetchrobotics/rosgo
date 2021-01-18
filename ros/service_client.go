@@ -143,7 +143,7 @@ func (c *defaultServiceClient) Call(srv Service) error {
 	if _, err = io.ReadFull(conn, resBuffer); err != nil {
 		return err
 	}
-	resReader := bytes.NewReader(resBuffer)
+	resReader := NewReader(resBuffer)
 	if err := srv.ResMessage().Deserialize(resReader); err != nil {
 		return err
 	}

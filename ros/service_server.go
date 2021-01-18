@@ -244,7 +244,7 @@ func (s *remoteClientSession) start() {
 
 	s.server.node.jobChan <- func() {
 		srv := s.server.srvType.NewService()
-		reader := bytes.NewReader(resBuffer)
+		reader := NewReader(resBuffer)
 		err := srv.ReqMessage().Deserialize(reader)
 		if err != nil {
 			s.errorChan <- err

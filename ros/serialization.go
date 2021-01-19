@@ -46,3 +46,8 @@ func (r *Reader) Next(n int) []byte {
 	r.i += n
 	return data
 }
+
+// Let implements the length remaining in the buffer
+func (r *Reader) Len() int {
+	return len(r.s) - r.i
+}

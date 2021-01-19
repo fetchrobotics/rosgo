@@ -1,5 +1,5 @@
 #!/bin/bash
-source /opt/ros/melodic/setup.bash
+source /opt/ros/noetic/setup.bash
 export PATH=$PWD/bin:/usr/local/go/bin:$PATH
 export GOPATH=$PWD:/usr/local/go
 

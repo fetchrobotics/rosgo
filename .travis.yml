@@ -1,15 +1,15 @@
 language: go
 
 go:
-    - "1.9"
-    - "1.10"
     - "1.11"
     - "1.12"
+    - "1.13"
+    - "1.14"
 
 env:
     - ROS_DOCKER=ros:kinetic-ros-base
-    - ROS_DOCKER=ros:lunar-ros-base
     - ROS_DOCKER=ros:melodic-ros-base
+    - ROS_DOCKER=ros:noetic-ros-base
 
 sudo: required
 

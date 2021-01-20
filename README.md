@@ -15,8 +15,8 @@
 
 ## Prerequisites
 
-To use this library you should have installed ROS: [Install](wiki.ros.org/melodic/Installation/Ubuntu).
-To run the tests please install all sensor msgs: `sudo apt install ros-melodic-desktop-full` for Ubuntu
+To use this library you should have installed ROS: [Install](wiki.ros.org/noetic/Installation/Ubuntu).
+To run the tests please install all sensor msgs: `sudo apt install ros-noetic-desktop-full` for Ubuntu
 
 ## Status
 

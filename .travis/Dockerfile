@@ -1,4 +1,4 @@
-ARG ROS_DOCKER=ros:melodic-ros-base
+ARG ROS_DOCKER=ros:noetic-ros-base
 FROM $ROS_DOCKER
 
 RUN apt-get update && apt-get install -y wget

@@ -256,7 +256,7 @@ func TestSerialize(t *testing.T) {
 
 func TestDeserialize(t *testing.T) {
 	source := getTestData()
-	reader := bytes.NewReader(source)
+	reader := ros.NewReader(source)
 	var msg rosgo_tests.AllFieldTypes
 	err := msg.Deserialize(reader)
 	if err != nil {
